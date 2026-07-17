@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:drsmells.com.my)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(npm -v)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/*/bin:$PATH\")",
+      "Read(//usr/local/bin/**)",
+      "Read(//usr/**)",
+      "Read(//opt/**)",
+      "Bash(mdfind \"kMDItemFSName == ''''node''''\")",
+      "Bash(sudo -n echo \"has sudo\")",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/local/bin:$PATH\")",
+      "Bash(source ~/.zshrc)",
+      "Bash(source ~/.bash_profile)"
+    ]
+  }
+}
