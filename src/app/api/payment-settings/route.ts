@@ -1,0 +1,78 @@
+import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+function getSupabase() {
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// Public: get payment settings (which gateways are enabled, shipping costs)
+export async function GET() {
+  try {
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "payment")
+      .single();
+
+    const settings = data?.value || {};
+
+    // Only return public-safe fields
+    return Response.json({
+      senangpay_enabled: settings.senangpay_enabled === true || settings.senangpay_enabled === "true",
+      stripe_enabled: settings.stripe_enabled === true || settings.stripe_enabled === "true",
+      doku_enabled: settings.doku_enabled === true || settings.doku_enabled === "true",
+      shipping_cost: settings.shipping_cost || "10.00",
+      free_shipping_threshold: settings.free_shipping_threshold || "100.00",
+      currency: settings.currency || "MYR",
+    });
+  } catch {
+    return Response.json({
+      senangpay_enabled: false,
+      stripe_enabled: false,
+      doku_enabled: false,
+      shipping_cost: "10.00",
+      free_shipping_threshold: "100.00",
+      currency: "MYR",
+    });
+  }
+}
+
+// Admin: update payment settings
+export async function PUT(request: Request) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_token");
+  if (!token) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+      .from("site_settings")
+      .upsert({
+        key: "payment",
+        value: {
+          senangpay_enabled: !!body.senangpay_enabled,
+          stripe_enabled: !!body.stripe_enabled,
+          doku_enabled: !!body.doku_enabled,
+          shipping_cost: body.shipping_cost || "10.00",
+          free_shipping_threshold: body.free_shipping_threshold || "100.00",
+          currency: body.currency || "MYR",
+        },
+      }, { onConflict: "key" });
+
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    return Response.json({ success: true });
+  } catch {
+    return Response.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
