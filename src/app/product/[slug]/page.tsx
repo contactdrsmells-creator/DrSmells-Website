@@ -319,7 +319,7 @@ export default function ProductPage() {
                   </span>
                   <span className="text-sm text-olive">
                     <span className="font-medium">Purchase one time</span>
-                    <span className="font-bold ml-1">RM{displayPrice.toFixed(2)}</span>
+                    {allAttrsSelected && <span className="font-bold ml-1">RM{displayPrice.toFixed(2)}</span>}
                   </span>
                 </button>
 
@@ -336,7 +336,7 @@ export default function ProductPage() {
                   </span>
                   <span className="text-sm text-olive">
                     <span className="font-medium">Subscribe from</span>
-                    <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{(lowestSubPrice ?? subPrice).toFixed(2)} / month</span>
+                    {allAttrsSelected && <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{(lowestSubPrice ?? subPrice).toFixed(2)} / month</span>}
                   </span>
                 </button>
 
