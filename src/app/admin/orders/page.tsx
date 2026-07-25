@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Order } from "@/lib/types";
-import { Package, Eye, ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { Package, Eye, ChevronDown, ChevronUp, Plus, X, Search } from "lucide-react";
+import { Product } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -28,10 +29,92 @@ export default function AdminOrdersPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedVariation, setSelectedVariation] = useState("");
+  const [variationSearch, setVariationSearch] = useState("");
+  const [showVariationDropdown, setShowVariationDropdown] = useState(false);
+  const [unitPrice, setUnitPrice] = useState("");
+  const productRef = useRef<HTMLDivElement>(null);
+  const variationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadOrders();
+    loadProducts();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (productRef.current && !productRef.current.contains(e.target as Node)) setShowProductDropdown(false);
+      if (variationRef.current && !variationRef.current.contains(e.target as Node)) setShowVariationDropdown(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function loadProducts() {
+    try {
+      const res = await fetch("/api/products");
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data.products || []);
+      }
+    } catch {
+      console.error("Failed to load products");
+    }
+  }
+
+  function getVariationsForProduct(product: Product): { name: string; price: number }[] {
+    const results: { name: string; price: number }[] = [];
+    if (product.variation_combos && product.variation_combos.length > 0) {
+      for (const combo of product.variation_combos) {
+        const label = Object.values(combo.selections).join(" / ");
+        results.push({ name: label, price: combo.sale_price ?? combo.price });
+      }
+    } else if (product.variations && product.variations.length > 0) {
+      for (const v of product.variations) {
+        results.push({ name: v.name, price: v.sale_price ?? v.price });
+      }
+    }
+    if (results.length === 0) {
+      results.push({ name: "Default", price: product.sale_price ?? product.price });
+    }
+    return results;
+  }
+
+  function selectProduct(product: Product) {
+    setSelectedProduct(product);
+    setProductSearch(product.name);
+    setShowProductDropdown(false);
+    setSelectedVariation("");
+    setVariationSearch("");
+    const variations = getVariationsForProduct(product);
+    if (variations.length === 1) {
+      setSelectedVariation(variations[0].name);
+      setVariationSearch(variations[0].name);
+      setUnitPrice(variations[0].price.toFixed(2));
+    } else {
+      setUnitPrice("");
+    }
+  }
+
+  function selectVariation(name: string, price: number) {
+    setSelectedVariation(name);
+    setVariationSearch(name);
+    setUnitPrice(price.toFixed(2));
+    setShowVariationDropdown(false);
+  }
+
+  const filteredProducts = products.filter((p) =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const availableVariations = selectedProduct ? getVariationsForProduct(selectedProduct) : [];
+  const filteredVariations = availableVariations.filter((v) =>
+    v.name.toLowerCase().includes(variationSearch.toLowerCase())
+  );
 
   async function loadOrders() {
     try {
@@ -61,6 +144,14 @@ export default function AdminOrdersPage() {
 
   async function createTestOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!selectedProduct) {
+      setCreateResult({ success: false, message: "Please select a product" });
+      return;
+    }
+    if (!selectedVariation) {
+      setCreateResult({ success: false, message: "Please select a variation" });
+      return;
+    }
     setCreating(true);
     setCreateResult(null);
 
@@ -71,10 +162,10 @@ export default function AdminOrdersPage() {
       customer_name: formData.get("customer_name"),
       phone: formData.get("phone"),
       email: formData.get("email"),
-      product_name: formData.get("product_name"),
-      variation: formData.get("variation") || "Default",
+      product_name: selectedProduct.name,
+      variation: selectedVariation,
       quantity: parseInt(formData.get("quantity") as string) || 1,
-      unit_price: parseFloat(formData.get("unit_price") as string) || 0,
+      unit_price: parseFloat(unitPrice) || 0,
       address_line1: formData.get("address_line1"),
       city: formData.get("city"),
       state: formData.get("state"),
@@ -92,6 +183,11 @@ export default function AdminOrdersPage() {
       if (res.ok) {
         setCreateResult({ success: true, message: `Order ${data.order_number} created and synced to CRM!` });
         form.reset();
+        setSelectedProduct(null);
+        setProductSearch("");
+        setSelectedVariation("");
+        setVariationSearch("");
+        setUnitPrice("");
         loadOrders();
       } else {
         setCreateResult({ success: false, message: data.error || "Failed to create order" });
@@ -153,17 +249,82 @@ export default function AdminOrdersPage() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Email *</label>
               <input name="email" type="email" required className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="john@example.com" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Product Name *</label>
-              <input name="product_name" required className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Anti-Odour Cream" />
+
+            {/* Product searchable dropdown */}
+            <div className="relative" ref={productRef}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Product *</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  value={productSearch}
+                  onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); if (!e.target.value) { setSelectedProduct(null); setSelectedVariation(""); setVariationSearch(""); setUnitPrice(""); } }}
+                  onFocus={() => setShowProductDropdown(true)}
+                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+                  placeholder="Search product..."
+                />
+              </div>
+              {showProductDropdown && productSearch && (
+                <div className="absolute z-20 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredProducts.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">No products found</div>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => selectProduct(p)}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${selectedProduct?.id === p.id ? "bg-olive/10 font-medium" : ""}`}
+                      >
+                        {p.image_url && <img src={p.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />}
+                        <div>
+                          <div className="text-gray-800">{p.name}</div>
+                          <div className="text-xs text-gray-400">RM {(p.sale_price ?? p.price).toFixed(2)}</div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Variation</label>
-              <input name="variation" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="50ml" />
+
+            {/* Variation searchable dropdown */}
+            <div className="relative" ref={variationRef}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Variation *</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  value={variationSearch}
+                  onChange={(e) => { setVariationSearch(e.target.value); setShowVariationDropdown(true); setSelectedVariation(""); }}
+                  onFocus={() => setShowVariationDropdown(true)}
+                  disabled={!selectedProduct}
+                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                  placeholder={selectedProduct ? "Search variation..." : "Select product first"}
+                />
+              </div>
+              {showVariationDropdown && selectedProduct && (
+                <div className="absolute z-20 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredVariations.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">No variations found</div>
+                  ) : (
+                    filteredVariations.map((v, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => selectVariation(v.name, v.price)}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex justify-between ${selectedVariation === v.name ? "bg-olive/10 font-medium" : ""}`}
+                      >
+                        <span className="text-gray-800">{v.name}</span>
+                        <span className="text-gray-500">RM {v.price.toFixed(2)}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Unit Price (RM)</label>
-              <input name="unit_price" type="number" step="0.01" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="49.90" />
+              <input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} type="number" step="0.01" className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50" placeholder="Auto-filled" readOnly />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Quantity</label>
@@ -179,16 +340,16 @@ export default function AdminOrdersPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
-              <input name="state" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Kuala Lumpur" />
+              <input name="state" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Selangor" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Postcode</label>
               <input name="postcode" className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="50000" />
             </div>
-            <div className="flex items-end">
+            <div className="md:col-span-2">
               <button
                 type="submit"
-                disabled={creating}
+                disabled={creating || !selectedProduct || !selectedVariation}
                 className="w-full px-4 py-2 bg-olive text-white rounded-lg hover:bg-olive/90 transition-colors text-sm disabled:opacity-50"
               >
                 {creating ? "Creating & Syncing to CRM..." : "Create Order & Sync to CRM"}
