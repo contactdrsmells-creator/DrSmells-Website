@@ -2,6 +2,7 @@ export interface ProductVariation {
   name: string;
   price: number;
   sale_price?: number | null;
+  subscription_price?: number | null;
 }
 
 // Multi-attribute variation system (e.g., size + color = 1 price)
@@ -14,6 +15,7 @@ export interface VariationCombo {
   selections: Record<string, string>;  // e.g., { "Size": "30ml", "Color": "Red" }
   price: number;
   sale_price?: number | null;
+  subscription_price?: number | null;
   in_stock?: boolean;
 }
 
@@ -38,7 +40,6 @@ export interface ProductPageSections {
 
 export interface SubscriptionOption {
   interval_months: number;
-  price: number;
 }
 
 export interface Product {

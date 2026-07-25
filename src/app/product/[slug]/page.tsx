@@ -136,13 +136,17 @@ export default function ProductPage() {
 
   const subOptions = product.subscription_options || [];
   const subEnabled = product.subscription_enabled && subOptions.length > 0;
-  const selectedSubOption = subOptions.find(o => o.interval_months === selectedInterval);
-  const subPrice = selectedSubOption?.price ?? (displayPrice * 0.9);
+
+  // Get subscription price from the selected variation/combo
+  const variationSubPrice = hasMultiAttr
+    ? (matchedCombo?.subscription_price ?? null)
+    : (selectedVariation?.subscription_price ?? null);
+  const subPrice = variationSubPrice ?? displayPrice;
 
   const handleAddToCart = () => {
     if (hasMultiAttr && !allAttrsSelected) return;
-    const subscription = purchaseType === "subscribe" && subEnabled && selectedSubOption
-      ? { interval_months: selectedSubOption.interval_months, price: selectedSubOption.price }
+    const subscription = purchaseType === "subscribe" && subEnabled
+      ? { interval_months: selectedInterval, price: subPrice }
       : null;
     for (let i = 0; i < quantity; i++) {
       addItem(product, cartLabel, subscription);
@@ -318,7 +322,7 @@ export default function ProductPage() {
                   </span>
                   <span className="text-sm text-olive">
                     <span className="font-medium">Subscribe from</span>
-                    <span className="text-olive font-bold ml-1">RM{Math.min(...subOptions.map(o => o.price)).toFixed(2)} / month</span>
+                    <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{subPrice.toFixed(2)} / month</span>
                   </span>
                 </button>
 
@@ -333,7 +337,7 @@ export default function ProductPage() {
                     >
                       {subOptions.map((opt) => (
                         <option key={opt.interval_months} value={opt.interval_months}>
-                          Every {opt.interval_months} month{opt.interval_months > 1 ? "s" : ""} for RM{opt.price.toFixed(2)}
+                          Every {opt.interval_months} month{opt.interval_months > 1 ? "s" : ""} for RM{subPrice.toFixed(2)}
                         </option>
                       ))}
                     </select>

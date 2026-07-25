@@ -319,6 +319,12 @@ export default function AdminProducts() {
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">Sale</span>
                       <input type="number" step="0.01" className="w-28 pl-10 pr-2 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Optional" value={v.sale_price || ""} onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], sale_price: e.target.value ? parseFloat(e.target.value) : null }; setVariations(u); }} />
                     </div>
+                    {subEnabled && (
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-green-500">Sub</span>
+                        <input type="number" step="0.01" className="w-28 pl-9 pr-2 py-2 border border-green-200 rounded-lg text-sm bg-green-50/50" placeholder="Sub price" value={v.subscription_price || ""} onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], subscription_price: e.target.value ? parseFloat(e.target.value) : null }; setVariations(u); }} />
+                      </div>
+                    )}
                     <button onClick={() => setVariations(variations.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
                   </div>
                 ))}
@@ -471,6 +477,23 @@ export default function AdminProducts() {
                               }}
                             />
                           </div>
+                          {subEnabled && (
+                            <div className="relative">
+                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-green-500">Sub</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="w-20 pl-7 pr-1 py-1 border border-green-200 rounded text-xs bg-green-50/50"
+                                placeholder="—"
+                                value={combo.subscription_price || ""}
+                                onChange={(e) => {
+                                  const u = [...varCombos];
+                                  u[cIdx] = { ...u[cIdx], subscription_price: e.target.value ? parseFloat(e.target.value) : null };
+                                  setVarCombos(u);
+                                }}
+                              />
+                            </div>
+                          )}
                           <label className="flex items-center gap-1 text-[10px]">
                             <input
                               type="checkbox"
@@ -501,7 +524,7 @@ export default function AdminProducts() {
                 </div>
                 {subEnabled && (
                   <div>
-                    <p className="text-xs text-gray-400 mb-3">Set the subscription intervals and prices available for this product.</p>
+                    <p className="text-xs text-gray-400 mb-3">Set which delivery intervals are available. Subscription prices are set per variation above.</p>
                     {subOptions.map((opt, idx) => (
                       <div key={idx} className="flex gap-2 mb-2 items-center">
                         <div className="relative flex-1">
@@ -512,17 +535,10 @@ export default function AdminProducts() {
                           />
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">month(s)</span>
                         </div>
-                        <div className="relative">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">RM</span>
-                          <input type="number" step="0.01" className="w-32 pl-8 pr-2 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Price"
-                            value={opt.price || ""}
-                            onChange={(e) => { const u = [...subOptions]; u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 }; setSubOptions(u); }}
-                          />
-                        </div>
                         <button onClick={() => setSubOptions(subOptions.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
                       </div>
                     ))}
-                    <button onClick={() => setSubOptions([...subOptions, { interval_months: subOptions.length + 1, price: 0 }])} className="text-xs text-olive hover:underline">+ Add Interval</button>
+                    <button onClick={() => setSubOptions([...subOptions, { interval_months: subOptions.length + 1 }])} className="text-xs text-olive hover:underline">+ Add Interval</button>
                   </div>
                 )}
               </div>
