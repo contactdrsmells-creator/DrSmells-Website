@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHmac } from "crypto";
+import { syncOrderToCRM } from "@/lib/crm-sync";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -41,6 +42,11 @@ export async function GET(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("order_number", order_id);
+
+    // Sync paid order to CRM
+    await syncOrderToCRM(order_id!).catch((err) =>
+      console.error("[CRM Sync] Error in SenangPay GET:", err)
+    );
   } else {
     // Payment failed
     await supabase
@@ -89,6 +95,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("order_number", order_id);
+
+      // Sync paid order to CRM
+      await syncOrderToCRM(order_id).catch((err) =>
+        console.error("[CRM Sync] Error in SenangPay POST:", err)
+      );
     } else {
       await supabase
         .from("orders")

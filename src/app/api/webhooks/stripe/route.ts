@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { syncOrderToCRM } from "@/lib/crm-sync";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -43,6 +44,11 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("order_number", orderNumber);
+
+        // Sync paid order to CRM
+        await syncOrderToCRM(orderNumber).catch((err) =>
+          console.error("[CRM Sync] Error in Stripe webhook:", err)
+        );
       }
     }
 

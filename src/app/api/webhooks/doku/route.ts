@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { syncOrderToCRM } from "@/lib/crm-sync";
 
 function getSupabase() {
   return createClient(
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("order_number", invoiceNumber);
+
+      // Sync paid order to CRM
+      await syncOrderToCRM(invoiceNumber).catch((err) =>
+        console.error("[CRM Sync] Error in DOKU webhook:", err)
+      );
     } else if (paymentStatus === "FAILED" || paymentStatus === "EXPIRED") {
       await supabase
         .from("orders")
