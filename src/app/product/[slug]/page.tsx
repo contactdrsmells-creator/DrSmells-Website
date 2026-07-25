@@ -143,6 +143,17 @@ export default function ProductPage() {
     : (selectedVariation?.subscription_price ?? null);
   const subPrice = variationSubPrice ?? displayPrice;
 
+  // Lowest subscription price across all variations/combos for display
+  const lowestSubPrice = (() => {
+    const prices: number[] = [];
+    if (hasMultiAttr) {
+      varCombos.forEach(c => { if (c.subscription_price != null) prices.push(c.subscription_price); });
+    } else {
+      variations.forEach(v => { if (v.subscription_price != null) prices.push(v.subscription_price); });
+    }
+    return prices.length > 0 ? Math.min(...prices) : null;
+  })();
+
   const handleAddToCart = () => {
     if (hasMultiAttr && !allAttrsSelected) return;
     const subscription = purchaseType === "subscribe" && subEnabled
@@ -306,7 +317,10 @@ export default function ProductPage() {
                   }`}>
                     {purchaseType === "onetime" && <span className="w-2.5 h-2.5 rounded-full bg-olive" />}
                   </span>
-                  <span className="text-sm font-medium text-olive">Purchase one time</span>
+                  <span className="text-sm text-olive">
+                    <span className="font-medium">Purchase one time</span>
+                    <span className="font-bold ml-1">RM{displayPrice.toFixed(2)}</span>
+                  </span>
                 </button>
 
                 <button
@@ -322,7 +336,7 @@ export default function ProductPage() {
                   </span>
                   <span className="text-sm text-olive">
                     <span className="font-medium">Subscribe from</span>
-                    <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{subPrice.toFixed(2)} / month</span>
+                    <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{(lowestSubPrice ?? subPrice).toFixed(2)} / month</span>
                   </span>
                 </button>
 
