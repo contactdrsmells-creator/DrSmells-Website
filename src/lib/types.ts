@@ -36,6 +36,11 @@ export interface ProductPageSections {
   ask_us_faqs?: { question: string; answer: string }[];
 }
 
+export interface SubscriptionOption {
+  interval_months: number;
+  price: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -53,6 +58,8 @@ export interface Product {
   variations: ProductVariation[];
   variation_attributes?: VariationAttribute[];
   variation_combos?: VariationCombo[];
+  subscription_enabled?: boolean;
+  subscription_options?: SubscriptionOption[];
   in_stock: boolean;
   featured: boolean;
   sort_order: number;
@@ -108,6 +115,10 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedSize: string;
+  subscription?: {
+    interval_months: number;
+    price: number;
+  } | null;
 }
 
 export interface ShippingAddress {

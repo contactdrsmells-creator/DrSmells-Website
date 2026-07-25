@@ -97,10 +97,15 @@ export default function CheckoutPage() {
 
     try {
       const orderItems = items.map((item) => {
-        const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
-        const unitPrice = variation
-          ? (variation.sale_price ?? variation.price)
-          : (item.product.sale_price ?? item.product.price);
+        let unitPrice: number;
+        if (item.subscription) {
+          unitPrice = item.subscription.price;
+        } else {
+          const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
+          unitPrice = variation
+            ? (variation.sale_price ?? variation.price)
+            : (item.product.sale_price ?? item.product.price);
+        }
         return {
           product_id: item.product.id,
           product_name: item.product.name,
@@ -109,8 +114,11 @@ export default function CheckoutPage() {
           unit_price: unitPrice,
           total_price: unitPrice * item.quantity,
           image_url: item.product.image_url || undefined,
+          subscription: item.subscription || undefined,
         };
       });
+
+      const hasSubscription = items.some((item) => item.subscription);
 
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -118,10 +126,11 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           items: orderItems,
           shipping,
-          payment_method: paymentMethod,
+          payment_method: hasSubscription ? "stripe" : paymentMethod,
           subtotal: totalPrice,
           shipping_cost: shippingCost,
           total: orderTotal,
+          has_subscription: hasSubscription,
           source: (() => {
             const params = new URLSearchParams(window.location.search);
             return params.get("utm_source") || params.get("ref") || "Direct";

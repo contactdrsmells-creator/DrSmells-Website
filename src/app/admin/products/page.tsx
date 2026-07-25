@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Product, ProductPageSections, ProductVariation, VariationAttribute, VariationCombo } from "@/lib/types";
+import { Product, ProductPageSections, ProductVariation, VariationAttribute, VariationCombo, SubscriptionOption } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy } from "lucide-react";
@@ -36,6 +36,8 @@ export default function AdminProducts() {
   const [variations, setVariations] = useState<ProductVariation[]>([]);
   const [varAttrs, setVarAttrs] = useState<VariationAttribute[]>([]);
   const [varCombos, setVarCombos] = useState<VariationCombo[]>([]);
+  const [subEnabled, setSubEnabled] = useState(false);
+  const [subOptions, setSubOptions] = useState<SubscriptionOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -74,6 +76,8 @@ export default function AdminProducts() {
     setVariations(product.variations || (product.sizes || []).map((s) => ({ name: s, price: product.price, sale_price: product.sale_price })));
     setVarAttrs(product.variation_attributes || []);
     setVarCombos(product.variation_combos || []);
+    setSubEnabled(product.subscription_enabled || false);
+    setSubOptions(product.subscription_options || []);
     setIsNew(false);
     const sections = (product.page_sections || {}) as ProductPageSections;
     setPs(sections);
@@ -87,6 +91,8 @@ export default function AdminProducts() {
     setVariations([]);
     setVarAttrs([]);
     setVarCombos([]);
+    setSubEnabled(false);
+    setSubOptions([]);
     setIsNew(true);
     setPs({});
     setVpItems([]);
@@ -171,6 +177,8 @@ export default function AdminProducts() {
       image_url: images[0] || editing.image_url || null, images, sizes, variations,
       variation_attributes: varAttrs.length > 0 ? varAttrs : null,
       variation_combos: varCombos.length > 0 ? varCombos : null,
+      subscription_enabled: subEnabled,
+      subscription_options: subOptions.length > 0 ? subOptions : null,
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
       page_sections,
     };
@@ -479,6 +487,42 @@ export default function AdminProducts() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Subscription Settings */}
+              <div className="border border-green-200 rounded-lg p-4 bg-green-50/30">
+                <div className="flex items-center gap-3 mb-3">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input type="checkbox" checked={subEnabled} onChange={(e) => setSubEnabled(e.target.checked)} className="accent-olive" />
+                    Enable Subscription Purchase
+                  </label>
+                </div>
+                {subEnabled && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-3">Set the subscription intervals and prices available for this product.</p>
+                    {subOptions.map((opt, idx) => (
+                      <div key={idx} className="flex gap-2 mb-2 items-center">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">Every</span>
+                          <input type="number" min="1" max="12" className="w-full pl-12 pr-2 py-2 border border-gray-200 rounded-lg text-sm" placeholder="1"
+                            value={opt.interval_months || ""}
+                            onChange={(e) => { const u = [...subOptions]; u[idx] = { ...u[idx], interval_months: parseInt(e.target.value) || 1 }; setSubOptions(u); }}
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">month(s)</span>
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">RM</span>
+                          <input type="number" step="0.01" className="w-32 pl-8 pr-2 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Price"
+                            value={opt.price || ""}
+                            onChange={(e) => { const u = [...subOptions]; u[idx] = { ...u[idx], price: parseFloat(e.target.value) || 0 }; setSubOptions(u); }}
+                          />
+                        </div>
+                        <button onClick={() => setSubOptions(subOptions.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    <button onClick={() => setSubOptions([...subOptions, { interval_months: subOptions.length + 1, price: 0 }])} className="text-xs text-olive hover:underline">+ Add Interval</button>
                   </div>
                 )}
               </div>

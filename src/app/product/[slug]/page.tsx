@@ -39,6 +39,8 @@ export default function ProductPage() {
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  const [purchaseType, setPurchaseType] = useState<"onetime" | "subscribe">("onetime");
+  const [selectedInterval, setSelectedInterval] = useState<number>(1);
   const addItem = useCartStore((s) => s.addItem);
 
   const isConfigured =
@@ -132,10 +134,18 @@ export default function ProductPage() {
     ? varAttrs.map(a => `${a.name}: ${selectedAttrs[a.name]}`).join(" | ")
     : selectedSize;
 
+  const subOptions = product.subscription_options || [];
+  const subEnabled = product.subscription_enabled && subOptions.length > 0;
+  const selectedSubOption = subOptions.find(o => o.interval_months === selectedInterval);
+  const subPrice = selectedSubOption?.price ?? (displayPrice * 0.9);
+
   const handleAddToCart = () => {
     if (hasMultiAttr && !allAttrsSelected) return;
+    const subscription = purchaseType === "subscribe" && subEnabled && selectedSubOption
+      ? { interval_months: selectedSubOption.interval_months, price: selectedSubOption.price }
+      : null;
     for (let i = 0; i < quantity; i++) {
-      addItem(product, cartLabel);
+      addItem(product, cartLabel, subscription);
     }
     setQuantity(1);
   };
@@ -278,6 +288,60 @@ export default function ProductPage() {
               </div>
             )}
 
+            {/* Purchase Type: One-time vs Subscribe */}
+            {subEnabled && (
+              <div className="mb-5 space-y-2">
+                <button
+                  onClick={() => setPurchaseType("onetime")}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-colors ${
+                    purchaseType === "onetime" ? "border-olive bg-olive/5" : "border-olive/15 hover:border-olive/30"
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    purchaseType === "onetime" ? "border-olive" : "border-olive/30"
+                  }`}>
+                    {purchaseType === "onetime" && <span className="w-2.5 h-2.5 rounded-full bg-olive" />}
+                  </span>
+                  <span className="text-sm font-medium text-olive">Purchase one time</span>
+                </button>
+
+                <button
+                  onClick={() => { setPurchaseType("subscribe"); if (!selectedInterval && subOptions.length > 0) setSelectedInterval(subOptions[0].interval_months); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border-2 transition-colors ${
+                    purchaseType === "subscribe" ? "border-olive bg-olive/5" : "border-olive/15 hover:border-olive/30"
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    purchaseType === "subscribe" ? "border-olive" : "border-olive/30"
+                  }`}>
+                    {purchaseType === "subscribe" && <span className="w-2.5 h-2.5 rounded-full bg-olive" />}
+                  </span>
+                  <span className="text-sm text-olive">
+                    <span className="font-medium">Subscribe from</span>
+                    <span className="text-olive font-bold ml-1">RM{Math.min(...subOptions.map(o => o.price)).toFixed(2)} / month</span>
+                  </span>
+                </button>
+
+                {purchaseType === "subscribe" && (
+                  <div className="ml-8">
+                    <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Deliver:</p>
+                    <select
+                      value={selectedInterval}
+                      onChange={(e) => setSelectedInterval(parseInt(e.target.value))}
+                      className="w-full px-3 py-2.5 border border-olive/20 rounded-lg text-sm text-olive bg-white focus:outline-none focus:border-olive appearance-none"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+                    >
+                      {subOptions.map((opt) => (
+                        <option key={opt.interval_months} value={opt.interval_months}>
+                          Every {opt.interval_months} month{opt.interval_months > 1 ? "s" : ""} for RM{opt.price.toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-end gap-3 mb-6">
               <div>
                 <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Quantity</p>
@@ -298,9 +362,13 @@ export default function ProductPage() {
                   ? "Select Options"
                   : !comboInStock
                     ? "Out of Stock"
-                    : `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`)
+                    : purchaseType === "subscribe" && subEnabled
+                      ? `Subscribe — RM ${(subPrice * quantity).toFixed(2)}/mo`
+                      : `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`)
                 : (product.in_stock
-                  ? `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`
+                  ? purchaseType === "subscribe" && subEnabled
+                    ? `Subscribe — RM ${(subPrice * quantity).toFixed(2)}/mo`
+                    : `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`
                   : "Out of Stock")}
             </button>
             </div>

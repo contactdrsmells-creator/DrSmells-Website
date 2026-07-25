@@ -19,7 +19,7 @@ function generateOrderNumber(): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, total, source } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, total, source, has_subscription } = body;
 
     // Validate required fields
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
@@ -134,55 +134,101 @@ export async function POST(request: Request) {
         return Response.json({ error: "Stripe not configured" }, { status: 500 });
       }
 
-      // Dynamic import to avoid issues when stripe isn't needed
       const Stripe = (await import("stripe")).default;
       const stripe = new Stripe(stripeSecretKey);
 
       const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-      const lineItems = items.map((item: { product_name: string; quantity: number; unit_price: number; variation: string }) => ({
-        price_data: {
-          currency: "myr",
-          product_data: {
-            name: `${item.product_name} (${item.variation})`,
-          },
-          unit_amount: Math.round(item.unit_price * 100),
-        },
-        quantity: item.quantity,
-      }));
+      // Separate subscription and one-time items
+      const subscriptionItems = items.filter((item: { subscription?: { interval_months: number } }) => item.subscription);
+      const onetimeItems = items.filter((item: { subscription?: { interval_months: number } }) => !item.subscription);
 
-      // Add shipping as a line item if applicable
-      if (serverShippingCost > 0) {
-        lineItems.push({
+      if (has_subscription && subscriptionItems.length > 0) {
+        // Stripe Checkout in subscription mode
+        const subLineItems = subscriptionItems.map((item: { product_name: string; quantity: number; variation: string; subscription: { interval_months: number; price: number } }) => ({
+          price_data: {
+            currency: "myr" as const,
+            product_data: {
+              name: `${item.product_name} (${item.variation})`,
+            },
+            unit_amount: Math.round(item.subscription.price * 100),
+            recurring: {
+              interval: "month" as const,
+              interval_count: item.subscription.interval_months,
+            },
+          },
+          quantity: item.quantity,
+        }));
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: subLineItems,
+          mode: "subscription",
+          success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/checkout`,
+          metadata: {
+            order_number: orderNumber,
+            order_id: order.id,
+          },
+          customer_email: shipping.email,
+          subscription_data: {
+            metadata: {
+              order_number: orderNumber,
+              order_id: order.id,
+            },
+          },
+        });
+
+        await supabase
+          .from("orders")
+          .update({ payment_reference: session.id })
+          .eq("id", order.id);
+
+        redirect_url = session.url || "";
+      } else {
+        // Standard one-time Stripe payment
+        const lineItems = items.map((item: { product_name: string; quantity: number; unit_price: number; variation: string }) => ({
           price_data: {
             currency: "myr",
-            product_data: { name: "Shipping" },
-            unit_amount: Math.round(serverShippingCost * 100),
+            product_data: {
+              name: `${item.product_name} (${item.variation})`,
+            },
+            unit_amount: Math.round(item.unit_price * 100),
           },
-          quantity: 1,
+          quantity: item.quantity,
+        }));
+
+        if (serverShippingCost > 0) {
+          lineItems.push({
+            price_data: {
+              currency: "myr",
+              product_data: { name: "Shipping" },
+              unit_amount: Math.round(serverShippingCost * 100),
+            },
+            quantity: 1,
+          });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: lineItems,
+          mode: "payment",
+          success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/checkout`,
+          metadata: {
+            order_number: orderNumber,
+            order_id: order.id,
+          },
+          customer_email: shipping.email,
         });
+
+        await supabase
+          .from("orders")
+          .update({ payment_reference: session.id })
+          .eq("id", order.id);
+
+        redirect_url = session.url || "";
       }
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: lineItems,
-        mode: "payment",
-        success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/checkout`,
-        metadata: {
-          order_number: orderNumber,
-          order_id: order.id,
-        },
-        customer_email: shipping.email,
-      });
-
-      // Save stripe session ID as payment reference
-      await supabase
-        .from("orders")
-        .update({ payment_reference: session.id })
-        .eq("id", order.id);
-
-      redirect_url = session.url || "";
     } else if (payment_method === "doku") {
       const dokuClientId = process.env.DOKU_CLIENT_ID;
       const dokuSecretKey = process.env.DOKU_SECRET_KEY;

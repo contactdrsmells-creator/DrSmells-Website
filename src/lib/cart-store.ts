@@ -4,12 +4,17 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem, Product } from "./types";
 
+interface SubscriptionInfo {
+  interval_months: number;
+  price: number;
+}
+
 interface CartStore {
   items: CartItem[];
   isOpen: boolean;
-  addItem: (product: Product, size: string) => void;
-  removeItem: (productId: string, size: string) => void;
-  updateQuantity: (productId: string, size: string, quantity: number) => void;
+  addItem: (product: Product, size: string, subscription?: SubscriptionInfo | null) => void;
+  removeItem: (productId: string, size: string, subscriptionKey?: string) => void;
+  updateQuantity: (productId: string, size: string, quantity: number, subscriptionKey?: string) => void;
   clearCart: () => void;
   toggleCart: () => void;
   setCartOpen: (open: boolean) => void;
@@ -23,41 +28,46 @@ export const useCartStore = create<CartStore>()(
       items: [],
       isOpen: false,
 
-      addItem: (product, size) => {
+      addItem: (product, size, subscription = null) => {
         const items = get().items;
+        const subKey = subscription ? `sub-${subscription.interval_months}` : "onetime";
         const existing = items.find(
-          (item) => item.product.id === product.id && item.selectedSize === size
+          (item) => item.product.id === product.id && item.selectedSize === size &&
+            (item.subscription ? `sub-${item.subscription.interval_months}` : "onetime") === subKey
         );
         if (existing) {
           set({
             items: items.map((item) =>
-              item.product.id === product.id && item.selectedSize === size
+              item.product.id === product.id && item.selectedSize === size &&
+                (item.subscription ? `sub-${item.subscription.interval_months}` : "onetime") === subKey
                 ? { ...item, quantity: item.quantity + 1 }
                 : item
             ),
           });
         } else {
-          set({ items: [...items, { product, quantity: 1, selectedSize: size }] });
+          set({ items: [...items, { product, quantity: 1, selectedSize: size, subscription }] });
         }
         set({ isOpen: true });
       },
 
-      removeItem: (productId, size) => {
+      removeItem: (productId, size, subscriptionKey = "onetime") => {
         set({
           items: get().items.filter(
-            (item) => !(item.product.id === productId && item.selectedSize === size)
+            (item) => !(item.product.id === productId && item.selectedSize === size &&
+              (item.subscription ? `sub-${item.subscription.interval_months}` : "onetime") === subscriptionKey)
           ),
         });
       },
 
-      updateQuantity: (productId, size, quantity) => {
+      updateQuantity: (productId, size, quantity, subscriptionKey = "onetime") => {
         if (quantity <= 0) {
-          get().removeItem(productId, size);
+          get().removeItem(productId, size, subscriptionKey);
           return;
         }
         set({
           items: get().items.map((item) =>
-            item.product.id === productId && item.selectedSize === size
+            item.product.id === productId && item.selectedSize === size &&
+              (item.subscription ? `sub-${item.subscription.interval_months}` : "onetime") === subscriptionKey
               ? { ...item, quantity }
               : item
           ),
@@ -72,10 +82,13 @@ export const useCartStore = create<CartStore>()(
 
       totalPrice: () =>
         get().items.reduce((sum, item) => {
+          // Subscription items use their own price
+          if (item.subscription) {
+            return sum + item.subscription.price * item.quantity;
+          }
           // Check multi-attribute combo first
           const combos = item.product.variation_combos || [];
           if (combos.length > 0 && item.selectedSize.includes(": ")) {
-            // Parse "Size: 30ml | Color: Red" back into selections
             const selections: Record<string, string> = {};
             item.selectedSize.split(" | ").forEach(part => {
               const [k, v] = part.split(": ");
