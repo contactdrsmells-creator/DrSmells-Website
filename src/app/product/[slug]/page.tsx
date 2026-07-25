@@ -250,17 +250,17 @@ export default function ProductPage() {
 
             {/* Multi-Attribute Dropdowns */}
             {hasMultiAttr ? (
-              <div className="mb-5 space-y-4">
+              <div className="mb-5 space-y-3">
                 {varAttrs.map((attr) => (
-                  <div key={attr.name}>
-                    <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">{attr.name}</p>
+                  <div key={attr.name} className="flex items-center gap-3 bg-gray-50 rounded-lg overflow-hidden">
+                    <p className="flex-1 px-4 py-3 text-sm font-bold text-olive">{attr.name}</p>
                     <select
                       value={selectedAttrs[attr.name] || ""}
                       onChange={(e) => setSelectedAttrs(prev => ({ ...prev, [attr.name]: e.target.value }))}
-                      className="w-full px-3 py-2.5 md:px-4 md:py-3 border border-olive/20 rounded-lg text-xs md:text-sm text-olive bg-white focus:outline-none focus:border-olive appearance-none"
+                      className="flex-1 px-3 py-3 border border-olive/15 rounded-lg text-sm text-olive bg-white focus:outline-none focus:border-olive appearance-none"
                       style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
                     >
-                      <option value="">Select {attr.name}</option>
+                      <option value="">Select here</option>
                       {attr.options.map((opt) => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
