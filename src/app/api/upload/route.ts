@@ -1,9 +1,16 @@
 import { cookies } from "next/headers";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+function getSupabase() {
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+const BUCKET = "uploads";
 
 export async function POST(request: Request) {
-  // Check auth
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token");
   if (!token) {
@@ -18,7 +25,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "No file provided" }, { status: 400 });
   }
 
-  // Validate file type
   const allowedTypes = [
     "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml",
     "video/mp4", "video/webm", "video/quicktime",
@@ -27,33 +33,39 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid file type. Use JPG, PNG, WebP, GIF, SVG, MP4, or WebM." }, { status: 400 });
   }
 
-  // Validate file size (50MB max for videos, 10MB for images)
   const isVideo = file.type.startsWith("video/");
   const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
   if (file.size > maxSize) {
     return Response.json({ error: `File too large. Maximum ${isVideo ? "50MB" : "10MB"}.` }, { status: 400 });
   }
 
-  // Sanitize folder name
   const safeFolder = folder.replace(/[^a-zA-Z0-9_-]/g, "");
-  const uploadDir = path.join(process.cwd(), "public", safeFolder);
-
-  await mkdir(uploadDir, { recursive: true });
-
-  // Generate safe filename
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const safeName = file.name
     .replace(/\.[^/.]+$/, "")
     .replace(/[^a-zA-Z0-9_-]/g, "-")
     .toLowerCase();
-  const fileName = `${safeName}-${Date.now()}.${ext}`;
-  const filePath = path.join(uploadDir, fileName);
+  const fileName = `${safeFolder}/${safeName}-${Date.now()}.${ext}`;
 
-  // Write file
+  const supabase = getSupabase();
+
   const bytes = await file.arrayBuffer();
-  await writeFile(filePath, Buffer.from(bytes));
 
-  const publicUrl = `/${safeFolder}/${fileName}`;
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(fileName, bytes, {
+      contentType: file.type,
+      upsert: false,
+    });
 
-  return Response.json({ success: true, url: publicUrl, fileName });
+  if (uploadError) {
+    console.error("Supabase storage upload error:", uploadError);
+    return Response.json({ error: "Upload failed: " + uploadError.message }, { status: 500 });
+  }
+
+  const { data: urlData } = supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(fileName);
+
+  return Response.json({ success: true, url: urlData.publicUrl, fileName });
 }
