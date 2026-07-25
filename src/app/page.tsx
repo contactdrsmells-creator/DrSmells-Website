@@ -7,6 +7,8 @@ import { Star } from "lucide-react";
 import TestimonialSlider from "@/components/TestimonialSlider";
 import BrandSlideshow from "@/components/BrandSlideshow";
 
+export const revalidate = 60;
+
 export default async function HomePage() {
   const [products, testimonials, banners, siteImages] = await Promise.all([
     getFeaturedProducts(),

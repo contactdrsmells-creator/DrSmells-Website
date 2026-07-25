@@ -153,7 +153,7 @@ export default function AdminImages() {
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => {
+          {Array.from({ length: 9 }).map((_, i) => {
             const slotId = i === 0 ? "kol_image" : `kol_image_${i + 1}`;
             return (
               <div key={slotId} className="bg-white rounded-xl border border-gray-200 p-4">
