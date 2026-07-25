@@ -59,6 +59,86 @@ export async function GET(request: Request) {
   return Response.json({ orders: data || [] });
 }
 
+// POST: create test order (admin only) — for testing CRM integration
+export async function POST(request: Request) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_token");
+  if (!token) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { customer_name, phone, email, product_name, variation, quantity, unit_price, address_line1, address_line2, city, state, postcode } = body;
+
+    if (!customer_name || !phone || !email || !product_name) {
+      return Response.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const qty = quantity || 1;
+    const price = unit_price || 0;
+    const total = qty * price;
+
+    const now = new Date();
+    const datePart = now.toISOString().slice(2, 10).replace(/-/g, "");
+    const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const orderNumber = `DS-${datePart}-${rand}`;
+
+    const orderData = {
+      order_number: orderNumber,
+      status: "paid",
+      payment_method: "doku",
+      payment_status: "paid",
+      payment_reference: `TEST-${Date.now()}`,
+      items: [
+        {
+          product_name,
+          variation: variation || "Default",
+          quantity: qty,
+          unit_price: price,
+          total_price: total,
+        },
+      ],
+      shipping: {
+        name: customer_name,
+        email,
+        phone,
+        address_line1: address_line1 || "Test Address",
+        address_line2: address_line2 || "",
+        city: city || "Kuala Lumpur",
+        state: state || "Kuala Lumpur",
+        postcode: postcode || "50000",
+        country: "Malaysia",
+      },
+      subtotal: total,
+      shipping_cost: 0,
+      total,
+    };
+
+    const supabase = getSupabase();
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert(orderData)
+      .select()
+      .single();
+
+    if (orderError) {
+      return Response.json({ error: orderError.message }, { status: 500 });
+    }
+
+    // Sync to CRM since this is a "paid" order
+    const { syncOrderToCRM } = await import("@/lib/crm-sync");
+    await syncOrderToCRM(orderNumber).catch((err: Error) =>
+      console.error("[CRM Sync] Test order sync error:", err)
+    );
+
+    return Response.json({ success: true, order_number: orderNumber, crm_synced: true });
+  } catch (err) {
+    console.error("Test order creation error:", err);
+    return Response.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
 // PUT: update order status (admin only)
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
