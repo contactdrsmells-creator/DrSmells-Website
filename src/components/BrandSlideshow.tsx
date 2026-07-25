@@ -69,7 +69,7 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
       </div>
 
       {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/55" />
+      <div className="absolute inset-0 bg-black/70" />
 
       {/* Text content */}
       <div className="absolute inset-0 z-10 flex items-center justify-center">
