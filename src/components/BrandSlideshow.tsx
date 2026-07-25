@@ -11,8 +11,10 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
   const [offset, setOffset] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const visibleCount = 3;
+
   useEffect(() => {
-    if (images.length <= 3) return;
+    if (images.length <= visibleCount) return;
     intervalRef.current = setInterval(() => {
       setOffset((prev) => (prev + 1) % images.length);
     }, 4000);
@@ -31,39 +33,45 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
     );
   }
 
-  // Get 3 visible images (or fewer if less uploaded)
-  const count = Math.min(images.length, 3);
-  const visible: string[] = [];
-  for (let i = 0; i < count; i++) {
-    visible.push(images[(offset + i) % images.length]);
-  }
+  const extendedImages = [...images, ...images, ...images];
 
   return (
     <section className="relative w-full overflow-hidden">
-      {/* 3 images side by side */}
-      <div className="flex w-full" style={{ height: "60vh" }}>
-        {visible.map((img, i) => (
-          <div
-            key={`${offset}-${i}`}
-            className={`relative h-full flex-1 overflow-hidden ${i === 2 && count === 3 ? "hidden md:block" : ""}`}
-            style={{
-              animation: "fadeSlideIn 0.7s ease-in-out",
-            }}
-          >
-            <img
-              src={img}
-              alt=""
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          </div>
-        ))}
+      <div style={{ height: "60vh", overflow: "hidden" }}>
+        <div
+          style={{
+            display: "flex",
+            width: `${(extendedImages.length / visibleCount) * 100}%`,
+            height: "100%",
+            transform: `translateX(-${(offset * 100) / extendedImages.length}%)`,
+            transition: "transform 1s ease-in-out",
+          }}
+        >
+          {extendedImages.map((img, i) => (
+            <div
+              key={i}
+              className={i % visibleCount === 2 ? "hidden md:block" : ""}
+              style={{
+                flex: `0 0 ${100 / extendedImages.length}%`,
+                height: "100%",
+                overflow: "hidden",
+              }}
+            >
+              <img
+                src={img}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                loading="lazy"
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Dark overlay across all images */}
-      <div className="absolute inset-0 bg-black/30" />
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/55" />
 
-      {/* Text content overlaid on all 3 images */}
+      {/* Text content */}
       <div className="absolute inset-0 z-10 flex items-center justify-center">
         <div className="text-center text-white px-4 max-w-3xl">
           {children}
@@ -71,27 +79,20 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
       </div>
 
       {/* Dots */}
-      {images.length > 3 && (
+      {images.length > visibleCount && (
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex gap-2">
           {images.map((_, i) => (
             <button
               key={i}
               onClick={() => setOffset(i)}
               className={`w-2 h-2 rounded-full transition-colors ${
-                i === offset ? "bg-white" : "bg-white/40"
+                i === offset % images.length ? "bg-white" : "bg-white/40"
               }`}
               aria-label={`Slide ${i + 1}`}
             />
           ))}
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateX(30px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
     </section>
   );
 }
