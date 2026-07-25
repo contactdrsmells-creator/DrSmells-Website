@@ -79,15 +79,36 @@ export async function POST(request: Request) {
     const price = unit_price || 0;
     const total = qty * price;
 
-    const now = new Date();
-    const datePart = now.toISOString().slice(2, 10).replace(/-/g, "");
-    const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const orderNumber = `DS-${datePart}-${rand}`;
+    // Fetch next order ID from CRM
+    let crmOrderNum = 0;
+    try {
+      const crmUrl = process.env.CRM_WEBHOOK_URL;
+      if (crmUrl) {
+        const crmBase = new URL(crmUrl).origin;
+        const crmRes = await fetch(`${crmBase}/api/webhook/next-order-id`, {
+          headers: { "x-webhook-secret": process.env.CRM_WEBHOOK_SECRET || "" },
+        });
+        if (crmRes.ok) {
+          const crmData = await crmRes.json();
+          crmOrderNum = crmData.next_id || 0;
+        }
+      }
+    } catch {
+      console.error("[Orders] Failed to fetch CRM next order ID");
+    }
+
+    const randomLetters = String.fromCharCode(
+      65 + Math.floor(Math.random() * 26),
+      65 + Math.floor(Math.random() * 26)
+    );
+    const orderNumber = crmOrderNum > 0
+      ? `${crmOrderNum}W${randomLetters}`
+      : `DS-${Date.now()}`;
 
     const orderData = {
       order_number: orderNumber,
       status: "paid",
-      payment_method: "doku",
+      payment_method: "manual",
       payment_status: "paid",
       payment_reference: `TEST-${Date.now()}`,
       items: [

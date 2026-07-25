@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Order } from "@/lib/types";
-import { Package, Eye, ChevronDown, ChevronUp, Plus, X, Search } from "lucide-react";
+import { Package, ChevronDown, ChevronUp, Plus, X, Search } from "lucide-react";
 import { Product } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -387,39 +387,67 @@ export default function AdminOrdersPage() {
           <p className="text-gray-500">No orders found</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        {/* Table header */}
+        <div className="bg-white rounded-xl border overflow-hidden">
+          <div className="hidden md:grid grid-cols-[1fr_1.2fr_100px_100px_100px_100px_50px] gap-2 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <span>Order ID</span>
+            <span>Customer</span>
+            <span>Status</span>
+            <span>Origin</span>
+            <span className="text-right">Total</span>
+            <span className="text-right">Date</span>
+            <span></span>
+          </div>
+
+          <div className="divide-y">
           {filteredOrders.map((order) => {
             const isExpanded = expandedId === order.id;
+            const customerName = order.shipping?.name || "—";
+            const origin = order.payment_method === "manual" ? "Admin" : order.payment_method || "Website";
             return (
-              <div key={order.id} className="bg-white rounded-xl border overflow-hidden">
-                {/* Order header */}
+              <div key={order.id}>
+                {/* Order row */}
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  className="w-full px-6 py-4 hover:bg-gray-50 transition-colors text-left"
                 >
-                  <div className="flex items-center gap-4">
+                  {/* Desktop row */}
+                  <div className="hidden md:grid grid-cols-[1fr_1.2fr_100px_100px_100px_100px_50px] gap-2 items-center">
+                    <span className="font-semibold text-gray-800 text-sm">{order.order_number}</span>
                     <div>
-                      <p className="font-semibold text-gray-800 text-left">{order.order_number}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(order.created_at).toLocaleDateString("en-MY", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                      <p className="text-sm text-gray-800">{customerName}</p>
+                      <p className="text-xs text-gray-400">{order.shipping?.phone || ""}</p>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[order.status] || "bg-gray-100"}`}>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium text-center ${STATUS_COLORS[order.status] || "bg-gray-100"}`}>
                       {order.status}
                     </span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[order.payment_status] || "bg-gray-100"}`}>
-                      {order.payment_status}
+                    <span className="text-xs text-gray-500 text-center">{origin}</span>
+                    <span className="text-sm font-semibold text-gray-800 text-right">RM {Number(order.total).toFixed(2)}</span>
+                    <span className="text-xs text-gray-500 text-right">
+                      {new Date(order.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "2-digit" })}
+                    </span>
+                    <span className="flex justify-end">
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <p className="font-semibold text-gray-800">RM {Number(order.total).toFixed(2)}</p>
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  {/* Mobile row */}
+                  <div className="md:hidden flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{order.order_number}</p>
+                      <p className="text-xs text-gray-500">{customerName}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[order.status] || "bg-gray-100"}`}>
+                          {order.status}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {new Date(order.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short" })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-2">
+                      <p className="font-semibold text-gray-800 text-sm">RM {Number(order.total).toFixed(2)}</p>
+                      {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    </div>
                   </div>
                 </button>
 
@@ -516,6 +544,7 @@ export default function AdminOrdersPage() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>
