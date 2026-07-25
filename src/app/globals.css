@@ -17,6 +17,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
+img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+
+a img, button img {
+  pointer-events: auto;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
