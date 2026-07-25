@@ -35,6 +35,7 @@ export async function syncOrderToCRM(orderNumber: string) {
 
   // Map website order to CRM format
   const crmOrder = {
+    website_order_id: orderNumber,
     customer_name: shipping.name || "Website Customer",
     phone: shipping.phone || "",
     email: shipping.email || "",

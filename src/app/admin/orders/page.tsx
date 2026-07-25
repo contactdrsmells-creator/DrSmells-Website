@@ -6,7 +6,8 @@ import { Package, ChevronDown, ChevronUp, Plus, X, Search } from "lucide-react";
 import { Product } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
+  pending: "bg-gray-100 text-gray-600",
+  processing: "bg-orange-100 text-orange-700",
   paid: "bg-green-100 text-green-800",
   shipped: "bg-blue-100 text-blue-800",
   completed: "bg-emerald-100 text-emerald-800",
@@ -37,6 +38,7 @@ export default function AdminOrdersPage() {
   const [variationSearch, setVariationSearch] = useState("");
   const [showVariationDropdown, setShowVariationDropdown] = useState(false);
   const [unitPrice, setUnitPrice] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const productRef = useRef<HTMLDivElement>(null);
   const variationRef = useRef<HTMLDivElement>(null);
 
@@ -199,7 +201,18 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const filteredOrders = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  const filteredOrders = orders.filter((o) => {
+    if (filter !== "all" && o.status !== filter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const name = (o.shipping?.name || "").toLowerCase();
+      const email = (o.shipping?.email || "").toLowerCase();
+      const phone = (o.shipping?.phone || "").toLowerCase();
+      const orderNum = (o.order_number || "").toLowerCase();
+      if (!name.includes(q) && !email.includes(q) && !phone.includes(q) && !orderNum.includes(q)) return false;
+    }
+    return true;
+  });
 
   if (loading) {
     return (
@@ -359,9 +372,22 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
+      {/* Search bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-3 py-2.5 border rounded-lg text-sm bg-white"
+            placeholder="Search by name, email, phone, or order ID..."
+          />
+        </div>
+      </div>
+
       {/* Filter tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {["all", "pending", "paid", "shipped", "completed", "cancelled"].map((s) => (
+        {["all", "pending", "processing", "paid", "shipped", "completed", "cancelled"].map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -388,11 +414,12 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1fr_1.2fr_100px_100px_100px_100px_50px] gap-2 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[0.8fr_1fr_1.2fr_90px_90px_90px_80px_40px] gap-2 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
             <span>Order ID</span>
             <span>Customer</span>
+            <span>Email</span>
             <span>Status</span>
-            <span>Origin</span>
+            <span>Source</span>
             <span className="text-right">Total</span>
             <span className="text-right">Date</span>
             <span></span>
@@ -402,7 +429,8 @@ export default function AdminOrdersPage() {
           {filteredOrders.map((order) => {
             const isExpanded = expandedId === order.id;
             const customerName = order.shipping?.name || "—";
-            const origin = order.payment_method === "manual" ? "Admin" : order.payment_method || "Website";
+            const customerEmail = order.shipping?.email || "—";
+            const source = order.source || "Direct";
             return (
               <div key={order.id}>
                 {/* Order row */}
@@ -411,16 +439,17 @@ export default function AdminOrdersPage() {
                   className="w-full px-6 py-4 hover:bg-gray-50 transition-colors text-left"
                 >
                   {/* Desktop row */}
-                  <div className="hidden md:grid grid-cols-[1fr_1.2fr_100px_100px_100px_100px_50px] gap-2 items-center">
+                  <div className="hidden md:grid grid-cols-[0.8fr_1fr_1.2fr_90px_90px_90px_80px_40px] gap-2 items-center">
                     <span className="font-semibold text-gray-800 text-sm">{order.order_number}</span>
                     <div>
                       <p className="text-sm text-gray-800">{customerName}</p>
                       <p className="text-xs text-gray-400">{order.shipping?.phone || ""}</p>
                     </div>
+                    <span className="text-sm text-gray-500 truncate">{customerEmail}</span>
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium text-center ${STATUS_COLORS[order.status] || "bg-gray-100"}`}>
                       {order.status}
                     </span>
-                    <span className="text-xs text-gray-500 text-center">{origin}</span>
+                    <span className="text-xs text-gray-500 text-center capitalize">{source}</span>
                     <span className="text-sm font-semibold text-gray-800 text-right">RM {Number(order.total).toFixed(2)}</span>
                     <span className="text-xs text-gray-500 text-right">
                       {new Date(order.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "2-digit" })}
@@ -517,6 +546,7 @@ export default function AdminOrdersPage() {
                           className="px-3 py-1.5 border rounded-lg text-sm bg-white"
                         >
                           <option value="pending">Pending</option>
+                          <option value="processing">Processing</option>
                           <option value="paid">Paid</option>
                           <option value="shipped">Shipped</option>
                           <option value="completed">Completed</option>

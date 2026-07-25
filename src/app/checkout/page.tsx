@@ -122,6 +122,10 @@ export default function CheckoutPage() {
           subtotal: totalPrice,
           shipping_cost: shippingCost,
           total: orderTotal,
+          source: (() => {
+            const params = new URLSearchParams(window.location.search);
+            return params.get("utm_source") || params.get("ref") || "Direct";
+          })(),
         }),
       });
 

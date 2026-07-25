@@ -135,10 +135,11 @@ export interface OrderItem {
 export interface Order {
   id: string;
   order_number: string;
-  status: "pending" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
+  status: "pending" | "processing" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
   payment_method: "senangpay" | "stripe" | "doku" | "manual";
   payment_status: "pending" | "paid" | "failed" | "refunded";
   payment_reference?: string;
+  source?: string;
   items: OrderItem[];
   shipping: ShippingAddress;
   subtotal: number;

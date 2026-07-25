@@ -39,6 +39,15 @@ export async function POST(request: Request) {
       await syncOrderToCRM(invoiceNumber).catch((err) =>
         console.error("[CRM Sync] Error in DOKU webhook:", err)
       );
+    } else if (paymentStatus === "PENDING" || paymentStatus === "AUTHORIZED") {
+      await supabase
+        .from("orders")
+        .update({
+          status: "processing",
+          payment_status: "pending",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_number", invoiceNumber);
     } else if (paymentStatus === "FAILED" || paymentStatus === "EXPIRED") {
       await supabase
         .from("orders")

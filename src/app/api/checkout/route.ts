@@ -19,7 +19,7 @@ function generateOrderNumber(): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, total } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, total, source } = body;
 
     // Validate required fields
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
         payment_status: "pending",
         items,
         shipping,
+        source: source || "Direct",
         subtotal: verifiedTotal,
         shipping_cost: serverShippingCost,
         total: serverTotal,
