@@ -9,9 +9,17 @@ interface BrandSlideshowProps {
 
 export default function BrandSlideshow({ images, children }: BrandSlideshowProps) {
   const [offset, setOffset] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const visibleCount = 3;
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const visibleCount = isMobile ? 2 : 3;
 
   useEffect(() => {
     if (images.length <= visibleCount) return;
@@ -21,7 +29,7 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [images.length]);
+  }, [images.length, visibleCount]);
 
   if (images.length === 0) {
     return (
@@ -34,6 +42,7 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
   }
 
   const extendedImages = [...images, ...images, ...images];
+  const itemWidth = 100 / extendedImages.length;
 
   return (
     <section className="relative w-full overflow-hidden">
@@ -43,16 +52,15 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
             display: "flex",
             width: `${(extendedImages.length / visibleCount) * 100}%`,
             height: "100%",
-            transform: `translateX(-${(offset * 100) / extendedImages.length}%)`,
+            transform: `translateX(-${offset * itemWidth}%)`,
             transition: "transform 1s ease-in-out",
           }}
         >
           {extendedImages.map((img, i) => (
             <div
               key={i}
-              className={i % visibleCount === 2 ? "hidden md:block" : ""}
               style={{
-                flex: `0 0 ${100 / extendedImages.length}%`,
+                flex: `0 0 ${itemWidth}%`,
                 height: "100%",
                 overflow: "hidden",
               }}
@@ -77,22 +85,6 @@ export default function BrandSlideshow({ images, children }: BrandSlideshowProps
           {children}
         </div>
       </div>
-
-      {/* Dots */}
-      {images.length > visibleCount && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex gap-2">
-          {images.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setOffset(i)}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                i === offset % images.length ? "bg-white" : "bg-white/40"
-              }`}
-              aria-label={`Slide ${i + 1}`}
-            />
-          ))}
-        </div>
-      )}
     </section>
   );
 }
