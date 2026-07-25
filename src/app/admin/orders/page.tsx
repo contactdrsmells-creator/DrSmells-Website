@@ -387,7 +387,6 @@ export default function AdminOrdersPage() {
           <p className="text-gray-500">No orders found</p>
         </div>
       ) : (
-        {/* Table header */}
         <div className="bg-white rounded-xl border overflow-hidden">
           <div className="hidden md:grid grid-cols-[1fr_1.2fr_100px_100px_100px_100px_50px] gap-2 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase tracking-wide">
             <span>Order ID</span>
