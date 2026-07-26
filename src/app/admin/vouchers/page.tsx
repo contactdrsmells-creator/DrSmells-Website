@@ -19,7 +19,7 @@ interface Voucher {
 
 const emptyVoucher = {
   code: "",
-  discount_type: "percentage" as const,
+  discount_type: "percentage" as "percentage" | "fixed",
   discount_value: 0,
   min_order_amount: 0,
   max_uses: "",
