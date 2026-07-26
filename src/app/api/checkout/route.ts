@@ -19,9 +19,8 @@ function generateOrderNumber(): string {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, total, source, has_subscription } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription } = body;
 
-    // Validate required fields
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -30,10 +29,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid payment method" }, { status: 400 });
     }
 
-    // Server-side price verification
     const supabase = getSupabase();
-    let verifiedTotal = 0;
 
+    // Server-side price verification
+    let verifiedTotal = 0;
     for (const item of items) {
       const { data: product } = await supabase
         .from("products")
@@ -53,21 +52,52 @@ export async function POST(request: Request) {
       verifiedTotal += serverPrice * item.quantity;
     }
 
-    // Get payment settings for shipping cost verification
-    const { data: settingsRow } = await supabase
+    // Verify shipping cost from zones
+    const { data: shippingSettings } = await supabase
       .from("site_settings")
       .select("value")
-      .eq("key", "payment")
+      .eq("key", "shipping")
       .single();
 
-    const paySettings = settingsRow?.value || {};
-    const serverShippingCost = verifiedTotal >= parseFloat(paySettings.free_shipping_threshold || "100")
-      ? 0
-      : parseFloat(paySettings.shipping_cost || "10");
-    const serverTotal = verifiedTotal + serverShippingCost;
+    const zones = shippingSettings?.value?.zones || [];
+    const matchedZone = zones.find((z: { states: string[] }) => z.states.includes(shipping.state));
+    const serverShippingCost = matchedZone
+      ? (matchedZone.free_shipping_min > 0 && verifiedTotal >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
+      : (shipping_cost || 0);
 
-    // Allow small floating point differences
-    if (Math.abs(serverTotal - total) > 0.02) {
+    // Verify voucher server-side
+    let serverDiscount = 0;
+    if (voucher_code) {
+      const { data: voucher } = await supabase
+        .from("vouchers")
+        .select("*")
+        .eq("code", voucher_code)
+        .eq("active", true)
+        .single();
+
+      if (voucher) {
+        const now = new Date();
+        const notExpired = !voucher.end_date || new Date(voucher.end_date) > now;
+        const notStarted = voucher.start_date && new Date(voucher.start_date) > now;
+        const withinLimit = !voucher.max_uses || voucher.used_count < voucher.max_uses;
+        const meetsMin = verifiedTotal >= (voucher.min_order_amount || 0);
+
+        if (notExpired && !notStarted && withinLimit && meetsMin) {
+          serverDiscount = voucher.discount_type === "percentage"
+            ? Math.min(verifiedTotal * (voucher.discount_value / 100), verifiedTotal)
+            : Math.min(voucher.discount_value, verifiedTotal);
+
+          await supabase
+            .from("vouchers")
+            .update({ used_count: (voucher.used_count || 0) + 1 })
+            .eq("id", voucher.id);
+        }
+      }
+    }
+
+    const serverTotal = Math.max(0, verifiedTotal - serverDiscount) + serverShippingCost;
+
+    if (Math.abs(serverTotal - total) > 1) {
       return Response.json({ error: "Price mismatch. Please refresh and try again." }, { status: 400 });
     }
 
@@ -85,6 +115,8 @@ export async function POST(request: Request) {
         source: source || "Direct",
         subtotal: verifiedTotal,
         shipping_cost: serverShippingCost,
+        discount: serverDiscount,
+        voucher_code: voucher_code || null,
         total: serverTotal,
       })
       .select()
@@ -112,7 +144,6 @@ export async function POST(request: Request) {
       const email = shipping.email;
       const phone = shipping.phone;
 
-      // SenangPay HMAC-SHA256: secretkey + detail + amount + order_id
       const hashString = secretKey + detail + amountStr + orderNumber;
       const hash = createHmac("sha256", secretKey).update(hashString).digest("hex");
 
@@ -139,12 +170,9 @@ export async function POST(request: Request) {
 
       const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-      // Separate subscription and one-time items
       const subscriptionItems = items.filter((item: { subscription?: { interval_months: number } }) => item.subscription);
-      const onetimeItems = items.filter((item: { subscription?: { interval_months: number } }) => !item.subscription);
 
       if (has_subscription && subscriptionItems.length > 0) {
-        // Stripe Checkout in subscription mode
         const subLineItems = subscriptionItems.map((item: { product_name: string; quantity: number; variation: string; subscription: { interval_months: number; price: number } }) => ({
           price_data: {
             currency: "myr" as const,
@@ -186,7 +214,6 @@ export async function POST(request: Request) {
 
         redirect_url = session.url || "";
       } else {
-        // Standard one-time Stripe payment
         const lineItems = items.map((item: { product_name: string; quantity: number; unit_price: number; variation: string }) => ({
           price_data: {
             currency: "myr",
@@ -242,7 +269,6 @@ export async function POST(request: Request) {
       const timestamp = new Date().toISOString();
       const checkoutId = crypto.randomUUID();
 
-      // Set expiry to 24 hours from now
       const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
       const dokuBody = {
@@ -296,7 +322,6 @@ export async function POST(request: Request) {
 
       const dokuData = await dokuRes.json();
 
-      // Save DOKU checkout ID as payment reference
       await supabase
         .from("orders")
         .update({ payment_reference: checkoutId })

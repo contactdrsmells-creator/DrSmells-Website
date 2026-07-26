@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/cart-store";
 import { ShippingAddress } from "@/lib/types";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -15,11 +15,24 @@ const MALAYSIAN_STATES = [
 
 interface PaymentSettings {
   senangpay_enabled: boolean;
-  stripe_enabled: boolean;
   doku_enabled: boolean;
-  shipping_cost: string;
-  free_shipping_threshold: string;
-  currency: string;
+}
+
+interface ShippingZone {
+  id: string;
+  name: string;
+  states: string[];
+  flat_rate: number;
+  free_shipping_min: number;
+}
+
+interface VoucherResult {
+  valid: boolean;
+  code: string;
+  discount_type: "percentage" | "fixed";
+  discount_value: number;
+  min_order_amount: number;
+  error?: string;
 }
 
 export default function CheckoutPage() {
@@ -29,9 +42,15 @@ export default function CheckoutPage() {
   const clearCart = useCartStore((s) => s.clearCart);
 
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings | null>(null);
+  const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"senangpay" | "stripe" | "doku">("senangpay");
+  const [paymentMethod, setPaymentMethod] = useState<"senangpay" | "doku">("doku");
+
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<VoucherResult | null>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState("");
 
   const [shipping, setShipping] = useState<ShippingAddress>({
     name: "",
@@ -46,13 +65,15 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    fetch("/api/payment-settings")
-      .then((r) => r.json())
-      .then((data) => {
-        setPaymentSettings(data);
-        if (data.doku_enabled) setPaymentMethod("doku");
-        else if (data.senangpay_enabled) setPaymentMethod("senangpay");
-        else if (data.stripe_enabled) setPaymentMethod("stripe");
+    Promise.all([
+      fetch("/api/payment-settings").then((r) => r.json()),
+      fetch("/api/shipping-settings").then((r) => r.json()),
+    ])
+      .then(([payData, shipData]) => {
+        setPaymentSettings(payData);
+        setShippingZones(shipData.zones || []);
+        if (payData.doku_enabled) setPaymentMethod("doku");
+        else if (payData.senangpay_enabled) setPaymentMethod("senangpay");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -69,22 +90,58 @@ export default function CheckoutPage() {
     );
   }
 
-  const shippingCost = paymentSettings
-    ? totalPrice >= parseFloat(paymentSettings.free_shipping_threshold)
-      ? 0
-      : parseFloat(paymentSettings.shipping_cost)
+  const matchedZone = shippingZones.find((z) => z.states.includes(shipping.state));
+  const shippingCost = matchedZone
+    ? (matchedZone.free_shipping_min > 0 && totalPrice >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
     : 0;
-  const orderTotal = totalPrice + shippingCost;
+
+  const discount = appliedVoucher
+    ? appliedVoucher.discount_type === "percentage"
+      ? Math.min(totalPrice * (appliedVoucher.discount_value / 100), totalPrice)
+      : Math.min(appliedVoucher.discount_value, totalPrice)
+    : 0;
+
+  const orderTotal = Math.max(0, totalPrice - discount) + shippingCost;
 
   function updateField(field: keyof ShippingAddress, value: string) {
     setShipping((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function applyVoucher() {
+    if (!voucherCode.trim()) return;
+    setVoucherLoading(true);
+    setVoucherError("");
+    try {
+      const res = await fetch("/api/vouchers/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: voucherCode.trim(), subtotal: totalPrice }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setAppliedVoucher(data);
+        setVoucherError("");
+      } else {
+        setVoucherError(data.error || "Invalid voucher code");
+        setAppliedVoucher(null);
+      }
+    } catch {
+      setVoucherError("Failed to validate voucher");
+    } finally {
+      setVoucherLoading(false);
+    }
+  }
+
+  function removeVoucher() {
+    setAppliedVoucher(null);
+    setVoucherCode("");
+    setVoucherError("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
 
-    // Validate
     const required: (keyof ShippingAddress)[] = ["name", "email", "phone", "address_line1", "city", "state", "postcode"];
     for (const field of required) {
       if (!shipping[field]?.trim()) {
@@ -129,6 +186,8 @@ export default function CheckoutPage() {
           payment_method: hasSubscription ? "stripe" : paymentMethod,
           subtotal: totalPrice,
           shipping_cost: shippingCost,
+          discount,
+          voucher_code: appliedVoucher?.code || null,
           total: orderTotal,
           has_subscription: hasSubscription,
           source: (() => {
@@ -146,14 +205,11 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Clear cart before redirect
       clearCart();
 
       if (data.redirect_url) {
-        // Redirect to payment gateway
         window.location.href = data.redirect_url;
       } else {
-        // Manual / fallback — go to confirmation
         router.push(`/order-confirmation?order=${data.order_number}`);
       }
     } catch {
@@ -170,7 +226,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const noPaymentEnabled = !!paymentSettings && !paymentSettings.senangpay_enabled && !paymentSettings.stripe_enabled && !paymentSettings.doku_enabled;
+  const noPaymentEnabled = !!paymentSettings && !paymentSettings.senangpay_enabled && !paymentSettings.doku_enabled;
 
   return (
     <div className="min-h-screen bg-white">
@@ -274,46 +330,20 @@ export default function CheckoutPage() {
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  {shipping.state && matchedZone && (
+                    <p className="text-xs text-olive/50 mt-1">
+                      Shipping zone: {matchedZone.name}
+                      {matchedZone.free_shipping_min > 0 && ` (Free shipping above RM${matchedZone.free_shipping_min.toFixed(2)})`}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Payment Method */}
+              {/* Payment Method - Only DOKU and SenangPay, no Stripe */}
               {!noPaymentEnabled && (
                 <div className="mt-8">
                   <h2 className="text-lg font-semibold text-olive mb-4">Payment Method</h2>
                   <div className="space-y-3">
-                    {paymentSettings?.senangpay_enabled && (
-                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="senangpay"
-                          checked={paymentMethod === "senangpay"}
-                          onChange={() => setPaymentMethod("senangpay")}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">SenangPay</p>
-                          <p className="text-xs text-olive/50">Online Banking, Credit/Debit Card (Malaysia)</p>
-                        </div>
-                      </label>
-                    )}
-                    {paymentSettings?.stripe_enabled && (
-                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="stripe"
-                          checked={paymentMethod === "stripe"}
-                          onChange={() => setPaymentMethod("stripe")}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">Stripe</p>
-                          <p className="text-xs text-olive/50">Credit/Debit Card (International)</p>
-                        </div>
-                      </label>
-                    )}
                     {paymentSettings?.doku_enabled && (
                       <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
                         <input
@@ -330,6 +360,22 @@ export default function CheckoutPage() {
                         </div>
                       </label>
                     )}
+                    {paymentSettings?.senangpay_enabled && (
+                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="senangpay"
+                          checked={paymentMethod === "senangpay"}
+                          onChange={() => setPaymentMethod("senangpay")}
+                          className="accent-olive"
+                        />
+                        <div>
+                          <p className="font-medium text-olive">SenangPay</p>
+                          <p className="text-xs text-olive/50">Online Banking, Credit/Debit Card (Malaysia)</p>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
               )}
@@ -342,9 +388,11 @@ export default function CheckoutPage() {
                 <div className="space-y-3 mb-6">
                   {items.map((item) => {
                     const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
-                    const unitPrice = variation
-                      ? (variation.sale_price ?? variation.price)
-                      : (item.product.sale_price ?? item.product.price);
+                    const unitPrice = item.subscription
+                      ? item.subscription.price
+                      : variation
+                        ? (variation.sale_price ?? variation.price)
+                        : (item.product.sale_price ?? item.product.price);
                     return (
                       <div key={`${item.product.id}-${item.selectedSize}`} className="flex gap-3">
                         <div className="w-14 h-14 bg-white rounded-md flex-shrink-0 overflow-hidden">
@@ -356,7 +404,10 @@ export default function CheckoutPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-olive truncate">{item.product.name}</p>
-                          <p className="text-xs text-olive/50">{item.selectedSize} × {item.quantity}</p>
+                          <p className="text-xs text-olive/50">{item.selectedSize} x {item.quantity}</p>
+                          {item.subscription && (
+                            <p className="text-xs text-olive/60">Every {item.subscription.interval_months} month{item.subscription.interval_months > 1 ? "s" : ""}</p>
+                          )}
                         </div>
                         <p className="text-sm font-medium text-olive">RM {(unitPrice * item.quantity).toFixed(2)}</p>
                       </div>
@@ -364,17 +415,65 @@ export default function CheckoutPage() {
                   })}
                 </div>
 
+                {/* Voucher Code */}
+                <div className="border-t border-olive/10 pt-4 mb-4">
+                  {appliedVoucher ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">{appliedVoucher.code}</span>
+                        <span className="text-xs text-green-600">
+                          ({appliedVoucher.discount_type === "percentage"
+                            ? `${appliedVoucher.discount_value}% off`
+                            : `RM${appliedVoucher.discount_value.toFixed(2)} off`})
+                        </span>
+                      </div>
+                      <button type="button" onClick={removeVoucher} className="text-green-500 hover:text-green-700">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Voucher code"
+                          value={voucherCode}
+                          onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyVoucher())}
+                          className="flex-1 px-3 py-2 border border-olive/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
+                        />
+                        <button
+                          type="button"
+                          onClick={applyVoucher}
+                          disabled={voucherLoading || !voucherCode.trim()}
+                          className="px-4 py-2 bg-olive text-white text-sm font-medium rounded-lg hover:bg-sage-dark transition-colors disabled:opacity-50"
+                        >
+                          {voucherLoading ? "..." : "Apply"}
+                        </button>
+                      </div>
+                      {voucherError && <p className="text-xs text-red-500 mt-1">{voucherError}</p>}
+                    </div>
+                  )}
+                </div>
+
                 <div className="border-t border-olive/10 pt-4 space-y-2">
                   <div className="flex justify-between text-sm text-olive/70">
                     <span>Subtotal</span>
                     <span>RM {totalPrice.toFixed(2)}</span>
                   </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Discount</span>
+                      <span>-RM {discount.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm text-olive/70">
-                    <span>Shipping</span>
-                    <span>{shippingCost === 0 ? "FREE" : `RM ${shippingCost.toFixed(2)}`}</span>
+                    <span>Shipping{shipping.state && matchedZone ? ` (${matchedZone.name})` : ""}</span>
+                    <span>{!shipping.state ? "Select state" : shippingCost === 0 ? "FREE" : `RM ${shippingCost.toFixed(2)}`}</span>
                   </div>
-                  {shippingCost === 0 && paymentSettings && parseFloat(paymentSettings.free_shipping_threshold) > 0 && (
-                    <p className="text-xs text-green-600">Free shipping on orders above RM {paymentSettings.free_shipping_threshold}</p>
+                  {shippingCost === 0 && shipping.state && matchedZone && matchedZone.free_shipping_min > 0 && (
+                    <p className="text-xs text-green-600">Free shipping on orders above RM {matchedZone.free_shipping_min.toFixed(2)}</p>
                   )}
                   <div className="flex justify-between text-lg font-bold text-olive pt-2 border-t border-olive/10">
                     <span>Total</span>

@@ -17,6 +17,8 @@ import {
   ShoppingCart,
   CreditCard,
   MessageCircle,
+  Truck,
+  Ticket,
 } from "lucide-react";
 
 const navItems = [
@@ -26,6 +28,8 @@ const navItems = [
   { href: "/admin/reviews", icon: MessageCircle, label: "Reviews" },
   { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
   { href: "/admin/payment", icon: CreditCard, label: "Payment" },
+  { href: "/admin/shipping", icon: Truck, label: "Shipping" },
+  { href: "/admin/vouchers", icon: Ticket, label: "Vouchers" },
   { href: "/admin/settings", icon: Settings, label: "Site Settings" },
 ];
 
