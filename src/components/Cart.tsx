@@ -1,6 +1,7 @@
 "use client";
 
-import { X, Plus, Minus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { X, Plus, Minus, Trash2, Tag, Loader2 } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 
@@ -11,6 +12,54 @@ export default function Cart() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const totalPrice = useCartStore((s) => s.totalPrice());
+
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    code: string;
+    discount_type: "percentage" | "fixed";
+    discount_value: number;
+  } | null>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState("");
+
+  const hasSubscription = items.some((item) => item.subscription);
+
+  const discount = appliedVoucher
+    ? appliedVoucher.discount_type === "percentage"
+      ? Math.min(totalPrice * (appliedVoucher.discount_value / 100), totalPrice)
+      : Math.min(appliedVoucher.discount_value, totalPrice)
+    : 0;
+
+  async function applyVoucher() {
+    if (!voucherCode.trim()) return;
+    setVoucherLoading(true);
+    setVoucherError("");
+    try {
+      const res = await fetch("/api/vouchers/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: voucherCode.trim(), subtotal: totalPrice, has_subscription: hasSubscription }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setAppliedVoucher(data);
+        setVoucherError("");
+      } else {
+        setVoucherError(data.error || "Invalid voucher code");
+        setAppliedVoucher(null);
+      }
+    } catch {
+      setVoucherError("Failed to validate voucher");
+    } finally {
+      setVoucherLoading(false);
+    }
+  }
+
+  function removeVoucher() {
+    setAppliedVoucher(null);
+    setVoucherCode("");
+    setVoucherError("");
+  }
 
   return (
     <div className="fixed inset-0 z-50">
@@ -125,9 +174,62 @@ export default function Cart() {
 
         {items.length > 0 && (
           <div className="border-t border-olive/10 px-6 py-4">
+            {/* Voucher Input */}
+            <div className="mb-4">
+              {appliedVoucher ? (
+                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">{appliedVoucher.code}</span>
+                    <span className="text-xs text-green-600">
+                      ({appliedVoucher.discount_type === "percentage"
+                        ? `${appliedVoucher.discount_value}% off`
+                        : `RM${appliedVoucher.discount_value.toFixed(2)} off`})
+                    </span>
+                  </div>
+                  <button onClick={removeVoucher} className="text-green-500 hover:text-green-700">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Voucher code"
+                      value={voucherCode}
+                      onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && applyVoucher()}
+                      className="flex-1 px-3 py-2 border border-olive/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
+                    />
+                    <button
+                      onClick={applyVoucher}
+                      disabled={voucherLoading || !voucherCode.trim()}
+                      className="px-4 py-2 bg-olive text-white text-sm font-medium rounded-lg hover:bg-sage-dark transition-colors disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {voucherLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Apply"}
+                    </button>
+                  </div>
+                  {voucherError && <p className="text-xs text-red-500 mt-1">{voucherError}</p>}
+                </div>
+              )}
+            </div>
+
+            {discount > 0 && (
+              <div className="flex justify-between text-sm mb-1 text-olive/70">
+                <span>Subtotal</span>
+                <span>RM {totalPrice.toFixed(2)}</span>
+              </div>
+            )}
+            {discount > 0 && (
+              <div className="flex justify-between text-sm mb-1 text-green-600">
+                <span>Discount</span>
+                <span>-RM {discount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-semibold mb-4 text-olive">
               <span>Total</span>
-              <span>RM {totalPrice.toFixed(2)}</span>
+              <span>RM {(totalPrice - discount).toFixed(2)}</span>
             </div>
             <button
               onClick={() => {

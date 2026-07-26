@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     start_date: body.start_date || null,
     end_date: body.end_date || null,
     active: body.active !== false,
+    applicable_for_subscription: body.applicable_for_subscription === true,
   });
 
   if (error) {
@@ -78,6 +79,7 @@ export async function PUT(request: Request) {
       start_date: body.start_date || null,
       end_date: body.end_date || null,
       active: body.active !== false,
+      applicable_for_subscription: body.applicable_for_subscription === true,
     })
     .eq("id", body.id);
 

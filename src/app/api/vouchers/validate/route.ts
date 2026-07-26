@@ -5,7 +5,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PU
 
 export async function POST(request: Request) {
   try {
-    const { code, subtotal } = await request.json();
+    const { code, subtotal, has_subscription } = await request.json();
 
     if (!code?.trim()) {
       return Response.json({ valid: false, error: "Please enter a voucher code" });
@@ -44,12 +44,20 @@ export async function POST(request: Request) {
       });
     }
 
+    if (has_subscription && !voucher.applicable_for_subscription) {
+      return Response.json({
+        valid: false,
+        error: "This voucher is not applicable for subscription orders",
+      });
+    }
+
     return Response.json({
       valid: true,
       code: voucher.code,
       discount_type: voucher.discount_type,
       discount_value: voucher.discount_value,
       min_order_amount: voucher.min_order_amount,
+      applicable_for_subscription: voucher.applicable_for_subscription ?? false,
     });
   } catch {
     return Response.json({ valid: false, error: "Failed to validate voucher" });

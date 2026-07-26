@@ -82,7 +82,9 @@ export async function POST(request: Request) {
         const withinLimit = !voucher.max_uses || voucher.used_count < voucher.max_uses;
         const meetsMin = verifiedTotal >= (voucher.min_order_amount || 0);
 
-        if (notExpired && !notStarted && withinLimit && meetsMin) {
+        const subOk = !has_subscription || voucher.applicable_for_subscription;
+
+        if (notExpired && !notStarted && withinLimit && meetsMin && subOk) {
           serverDiscount = voucher.discount_type === "percentage"
             ? Math.min(verifiedTotal * (voucher.discount_value / 100), verifiedTotal)
             : Math.min(voucher.discount_value, verifiedTotal);
