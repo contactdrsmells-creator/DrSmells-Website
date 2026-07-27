@@ -340,8 +340,16 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Payment Method - Only DOKU and SenangPay, no Stripe */}
-              {!noPaymentEnabled && (
+              {/* Payment Method */}
+              {hasSubscription ? (
+                <div className="mt-8">
+                  <h2 className="text-lg font-semibold text-olive mb-4">Payment Method</h2>
+                  <div className="p-4 border border-olive/20 rounded-lg bg-olive/5">
+                    <p className="font-medium text-olive">Stripe (Credit/Debit Card)</p>
+                    <p className="text-xs text-olive/50 mt-1">Subscription orders are processed securely via Stripe</p>
+                  </div>
+                </div>
+              ) : !noPaymentEnabled && (
                 <div className="mt-8">
                   <h2 className="text-lg font-semibold text-olive mb-4">Payment Method</h2>
                   <div className="space-y-3">
