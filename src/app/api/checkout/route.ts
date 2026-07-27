@@ -311,8 +311,12 @@ export async function POST(request: Request) {
     } else if (payment_method === "doku") {
       const dokuClientId = process.env.DOKU_CLIENT_ID;
       const dokuSecretKey = process.env.DOKU_SECRET_KEY;
+      // The API Key authenticates the request; the Secret Key only signs it.
+      // Verified via /api/admin/doku-diagnose: secret-key Authorization is
+      // rejected with "Invalid credentials", API-key Authorization passes.
+      const dokuApiKey = process.env.DOKU_API_KEY;
 
-      if (!dokuClientId || !dokuSecretKey) {
+      if (!dokuClientId || !dokuSecretKey || !dokuApiKey) {
         return Response.json({ error: "DOKU not configured" }, { status: 500 });
       }
 
@@ -365,7 +369,7 @@ export async function POST(request: Request) {
           "Request-Id": checkoutId,
           "Request-Timestamp": timestamp,
           "Signature": `HMACSHA256=${signature}`,
-          "Authorization": `Basic ${Buffer.from(dokuSecretKey).toString("base64")}`,
+          "Authorization": `Basic ${Buffer.from(dokuApiKey).toString("base64")}`,
           "API-Version": "arabica.2025-12-01",
         },
         body: bodyString,

@@ -25,18 +25,15 @@ export async function GET() {
 
   const b64 = (s: string) => Buffer.from(s).toString("base64");
 
-  const candidates: { label: string; authorization: string }[] = [
-    { label: "Basic base64(secretKey)", authorization: `Basic ${b64(secretKey)}` },
-    { label: "Basic base64(secretKey:)", authorization: `Basic ${b64(secretKey + ":")}` },
-    { label: "Basic base64(clientId:secretKey)", authorization: `Basic ${b64(`${clientId}:${secretKey}`)}` },
-  ];
-
-  if (apiKey) {
-    candidates.push(
-      { label: "Basic base64(apiKey)", authorization: `Basic ${b64(apiKey)}` },
-      { label: "Basic base64(apiKey:)", authorization: `Basic ${b64(apiKey + ":")}` },
-    );
+  if (!apiKey) {
+    return Response.json({ error: "DOKU_API_KEY not set — it is what authenticates the request" }, { status: 500 });
   }
+
+  // Auth is settled (API key). This now exercises the real checkout payload so a
+  // successful run returns an actual checkout_url — no customer needed to test.
+  const candidates: { label: string; authorization: string }[] = [
+    { label: "Basic base64(apiKey) — full payload", authorization: `Basic ${b64(apiKey)}` },
+  ];
 
   const results = [];
 
@@ -49,10 +46,23 @@ export async function GET() {
         amount: 1,
         invoice_number: `DIAG-${Date.now()}`,
         currency: "MYR",
+        expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         line_items: [{ name: "Diagnostic", quantity: 1, price: 1 }],
       },
-      customer: { name: "Diagnostic", email: "diagnostic@example.com", country: "MY" },
-      checkout_experience: { language: "EN" },
+      customer: {
+        name: "Diagnostic",
+        email: "diagnostic@example.com",
+        phone: "0100000000",
+        country: "MY",
+        address: "1 Test Street, Kuala Lumpur, Selangor 50000",
+      },
+      checkout_experience: {
+        language: "EN",
+        auto_redirect: true,
+        callback_url: "https://drsmells.com.my/api/webhooks/doku",
+        callback_url_cancel: "https://drsmells.com.my/checkout",
+        callback_url_result: "https://drsmells.com.my/order-confirmation",
+      },
     };
 
     const bodyString = JSON.stringify(body);
