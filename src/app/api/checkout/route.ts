@@ -9,7 +9,28 @@ function getSupabase() {
   return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-function generateOrderNumber(): string {
+async function generateOrderNumber(): Promise<string> {
+  try {
+    const crmUrl = process.env.CRM_WEBHOOK_URL;
+    if (crmUrl) {
+      const crmBase = new URL(crmUrl).origin;
+      const crmRes = await fetch(`${crmBase}/api/webhook/next-order-id`, {
+        headers: { "x-webhook-secret": process.env.CRM_WEBHOOK_SECRET || "" },
+      });
+      if (crmRes.ok) {
+        const crmData = await crmRes.json();
+        if (crmData.next_id) {
+          const randomLetters = String.fromCharCode(
+            65 + Math.floor(Math.random() * 26),
+            65 + Math.floor(Math.random() * 26)
+          );
+          return `${crmData.next_id}W${randomLetters}`;
+        }
+      }
+    }
+  } catch {
+    console.error("[Checkout] Failed to fetch CRM next order ID");
+  }
   const now = new Date();
   const datePart = now.toISOString().slice(2, 10).replace(/-/g, "");
   const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -104,7 +125,7 @@ export async function POST(request: Request) {
     }
 
     // Create order
-    const orderNumber = generateOrderNumber();
+    const orderNumber = await generateOrderNumber();
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({

@@ -13,20 +13,31 @@ function OrderConfirmationContent() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const sessionId = searchParams.get("session_id");
+
   useEffect(() => {
     if (!orderNumber) {
       setLoading(false);
       return;
     }
 
-    fetch(`/api/orders?order_number=${orderNumber}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.order) setOrder(data.order);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [orderNumber]);
+    async function load() {
+      if (sessionId) {
+        await fetch("/api/verify-stripe-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, order_number: orderNumber }),
+        }).catch(() => {});
+      }
+
+      const res = await fetch(`/api/orders?order_number=${orderNumber}`);
+      const data = await res.json();
+      if (data.order) setOrder(data.order);
+      setLoading(false);
+    }
+
+    load();
+  }, [orderNumber, sessionId]);
 
   if (loading) {
     return (

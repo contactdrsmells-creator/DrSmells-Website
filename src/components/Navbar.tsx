@@ -114,7 +114,7 @@ export default function Navbar() {
             {/* Right side icons */}
             <div className="flex items-center gap-4">
               <Link
-                href="/admin"
+                href="/account"
                 className="hidden md:flex text-olive/60 hover:text-olive transition-colors"
               >
                 <User className="w-5 h-5" />
@@ -171,11 +171,11 @@ export default function Navbar() {
               ))}
               <hr className="border-olive/10" />
               <Link
-                href="/admin"
+                href="/account"
                 onClick={() => setMobileOpen(false)}
                 className="block text-sm text-olive/80 hover:text-olive"
               >
-                Admin
+                My Account
               </Link>
             </div>
           </div>
