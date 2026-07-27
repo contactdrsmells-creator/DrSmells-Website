@@ -226,7 +226,8 @@ export default function CheckoutPage() {
     );
   }
 
-  const noPaymentEnabled = !!paymentSettings && !paymentSettings.senangpay_enabled && !paymentSettings.doku_enabled;
+  const hasSubscription = items.some((item) => item.subscription);
+  const noPaymentEnabled = !!paymentSettings && !paymentSettings.senangpay_enabled && !paymentSettings.doku_enabled && !hasSubscription;
 
   return (
     <div className="min-h-screen bg-white">

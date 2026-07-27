@@ -70,7 +70,7 @@ export default function AdminPaymentPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Payment Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure payment gateways and shipping</p>
+          <p className="text-sm text-gray-500 mt-1">Configure payment gateways</p>
         </div>
         <button
           onClick={handleSave}
@@ -194,31 +194,6 @@ export default function AdminPaymentPage() {
           )}
         </div>
 
-        {/* Shipping */}
-        <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Shipping</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Cost (RM)</label>
-              <input
-                type="text"
-                value={settings.shipping_cost}
-                onChange={(e) => setSettings({ ...settings, shipping_cost: e.target.value })}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Free Shipping Threshold (RM)</label>
-              <input
-                type="text"
-                value={settings.free_shipping_threshold}
-                onChange={(e) => setSettings({ ...settings, free_shipping_threshold: e.target.value })}
-                className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30"
-              />
-              <p className="text-xs text-gray-400 mt-1">Orders above this amount get free shipping. Set to 0 to disable.</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
