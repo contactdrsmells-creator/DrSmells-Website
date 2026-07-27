@@ -7,12 +7,11 @@ import { createHmac, createHash } from "crypto";
  * Auth is settled: the API Key authenticates (Basic base64(apiKey)); the Secret
  * Key only signs. See git history for the evidence.
  *
- * This now pins down the expected amount format. Getting it wrong is dangerous
- * in opposite directions — sending minor units when DOKU wants ringgit
- * undercharges 100x, and the reverse overcharges 100x — so rather than assume,
- * each representation is sent for a known RM 12.34 order and DOKU's own answer
- * decides it. A variant that succeeds echoes back the amount it recorded, which
- * is what actually confirms the magnitude.
+ * Amount magnitude is also settled: DOKU takes ringgit, not minor units. Note
+ * that the API accepts any representation and echoes it back unchanged, so the
+ * response alone proves nothing — this was confirmed by opening the hosted
+ * checkout page, where 1234 rendered as "RM 1,234.00" and 12.34 as "RM 12.34".
+ * Anything checked here should be verified the same way.
  *
  * Returns only DOKU's responses — never the credentials themselves.
  */
@@ -36,14 +35,37 @@ export async function GET() {
 
   const authorization = `Basic ${Buffer.from(apiKey).toString("base64")}`;
 
-  // One real-world-ish amount, expressed every plausible way. 12.34 is chosen so
-  // ringgit and minor units can't be confused for each other in the response.
-  const variants: { label: string; amount: unknown; price: unknown }[] = [
-    { label: "minor units, integer (1234 = RM12.34)", amount: 1234, price: 1234 },
-    { label: "ringgit, decimal (12.34)", amount: 12.34, price: 12.34 },
-    { label: "ringgit, string (\"12.34\")", amount: "12.34", price: "12.34" },
-    { label: "ringgit, whole integer (12)", amount: 12, price: 12 },
-    { label: "minor units, string (\"1234\")", amount: "1234", price: "1234" },
+  // Amount magnitude is settled: DOKU takes ringgit (sending 1234 rendered
+  // "RM 1,234.00" on the hosted page, 12.34 rendered "RM 12.34").
+  //
+  // Open question: order.amount is products + shipping - discount, while
+  // line_items lists products only, so the two disagree on any order with
+  // shipping or a voucher. The hosted page renders a Subtotal from line_items,
+  // so a mismatch either gets rejected or shows the customer a total that
+  // contradicts the amount charged. These variants establish which.
+  const variants: { label: string; amount: unknown; lines: unknown[] }[] = [
+    {
+      label: "A: mismatch — amount 70.90, lines total 64.90 (current behaviour w/ shipping)",
+      amount: 70.9,
+      lines: [{ name: "Anti-Odour Cream", quantity: 1, price: 64.9 }],
+    },
+    {
+      label: "B: matched — amount 70.90, lines 64.90 + shipping 6.00",
+      amount: 70.9,
+      lines: [
+        { name: "Anti-Odour Cream", quantity: 1, price: 64.9 },
+        { name: "Shipping", quantity: 1, price: 6.0 },
+      ],
+    },
+    {
+      label: "C: matched w/ negative discount line — amount 60.90",
+      amount: 60.9,
+      lines: [
+        { name: "Anti-Odour Cream", quantity: 1, price: 64.9 },
+        { name: "Shipping", quantity: 1, price: 6.0 },
+        { name: "Discount (TESTFREES)", quantity: 1, price: -10.0 },
+      ],
+    },
   ];
 
   const results: Record<string, unknown>[] = [];
@@ -59,7 +81,7 @@ export async function GET() {
         invoice_number: `DIAG-${Date.now()}-${results.length}`,
         currency: "MYR",
         expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        line_items: [{ name: "Diagnostic", quantity: 1, price: variant.price }],
+        line_items: variant.lines,
       },
       customer: {
         name: "Diagnostic",
@@ -134,7 +156,7 @@ export async function GET() {
 
   return Response.json({
     base_url: baseUrl,
-    note: "Order sent is RM 12.34. For any accepted variant, check doku_recorded_amount to confirm the magnitude before trusting it.",
+    note: "Amount is in RINGGIT (confirmed on hosted page). These variants test line_items vs order.amount consistency. Open each checkout_url and compare the displayed Subtotal/Total against the amount sent.",
     results,
   });
 }
