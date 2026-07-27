@@ -175,24 +175,65 @@ export async function POST(request: Request) {
       const subscriptionItems = items.filter((item: { subscription?: { interval_months: number } }) => item.subscription);
 
       if (has_subscription && subscriptionItems.length > 0) {
-        const subLineItems = subscriptionItems.map((item: { product_name: string; quantity: number; variation: string; subscription: { interval_months: number; price: number } }) => ({
-          price_data: {
-            currency: "myr" as const,
-            product_data: {
-              name: `${item.product_name} (${item.variation})`,
+        const onetimeItems = items.filter((item: { subscription?: { interval_months: number } }) => !item.subscription);
+
+        const lineItems: Array<{ price_data: { currency: string; product_data: { name: string }; unit_amount: number; recurring?: { interval: "month"; interval_count: number } }; quantity: number }> = [];
+
+        subscriptionItems.forEach((item: { product_name: string; quantity: number; variation: string; subscription: { interval_months: number; price: number } }) => {
+          lineItems.push({
+            price_data: {
+              currency: "myr",
+              product_data: {
+                name: `${item.product_name} (${item.variation})`,
+              },
+              unit_amount: Math.round(item.subscription.price * 100),
+              recurring: {
+                interval: "month" as const,
+                interval_count: item.subscription.interval_months,
+              },
             },
-            unit_amount: Math.round(item.subscription.price * 100),
-            recurring: {
-              interval: "month" as const,
-              interval_count: item.subscription.interval_months,
+            quantity: item.quantity,
+          });
+        });
+
+        onetimeItems.forEach((item: { product_name: string; quantity: number; variation: string; unit_price: number }) => {
+          lineItems.push({
+            price_data: {
+              currency: "myr",
+              product_data: {
+                name: `${item.product_name} (${item.variation})`,
+              },
+              unit_amount: Math.round(item.unit_price * 100),
             },
-          },
-          quantity: item.quantity,
-        }));
+            quantity: item.quantity,
+          });
+        });
+
+        if (serverShippingCost > 0) {
+          lineItems.push({
+            price_data: {
+              currency: "myr",
+              product_data: { name: "Shipping" },
+              unit_amount: Math.round(serverShippingCost * 100),
+            },
+            quantity: 1,
+          });
+        }
+
+        if (serverDiscount > 0) {
+          lineItems.push({
+            price_data: {
+              currency: "myr",
+              product_data: { name: "Discount" },
+              unit_amount: Math.round(serverDiscount * -100),
+            },
+            quantity: 1,
+          });
+        }
 
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
-          line_items: subLineItems,
+          line_items: lineItems,
           mode: "subscription",
           success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${origin}/checkout`,
