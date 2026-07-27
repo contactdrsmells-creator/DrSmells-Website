@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import { createHmac, createHash } from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -338,18 +339,21 @@ export async function POST(request: Request) {
         },
       };
 
-      const authorization = Buffer.from(`${dokuClientId}:${dokuSecretKey}`).toString("base64");
+      const bodyString = JSON.stringify(dokuBody);
+      const digest = createHash("sha256").update(bodyString).digest("base64");
+      const componentSignature = `Client-Id:${dokuClientId}\nRequest-Id:${checkoutId}\nRequest-Timestamp:${timestamp}\nRequest-Target:/v3/checkouts\nDigest:${digest}`;
+      const signature = createHmac("sha256", dokuSecretKey).update(componentSignature).digest("base64");
 
       const dokuRes = await fetch(`${dokuBaseUrl}/v3/checkouts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Basic ${authorization}`,
           "Client-Id": dokuClientId,
+          "Request-Id": checkoutId,
           "Request-Timestamp": timestamp,
-          "API-Version": "arabica.2025-12-01",
+          "Signature": `HMACSHA256=${signature}`,
         },
-        body: JSON.stringify(dokuBody),
+        body: bodyString,
       });
 
       if (!dokuRes.ok) {
