@@ -106,9 +106,13 @@ export async function POST(request: Request) {
         const subOk = !has_subscription || voucher.applicable_for_subscription;
 
         if (notExpired && !notStarted && withinLimit && meetsMin && subOk) {
-          serverDiscount = voucher.discount_type === "percentage"
+          // Round to whole cents — a percentage voucher otherwise yields
+          // fractional cents (e.g. RM133.245), which DOKU rejects as an invalid
+          // price and which would be stored/displayed inconsistently.
+          const rawDiscount = voucher.discount_type === "percentage"
             ? Math.min(verifiedTotal * (voucher.discount_value / 100), verifiedTotal)
             : Math.min(voucher.discount_value, verifiedTotal);
+          serverDiscount = Math.round(rawDiscount * 100) / 100;
 
           if (voucher.free_shipping) {
             serverShippingCost = 0;
@@ -327,6 +331,36 @@ export async function POST(request: Request) {
 
       const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
+      // DOKU rejects the order unless line_items sum exactly to order.amount
+      // ("AMOUNT NOT MATCH"), and rejects negative prices — so a discount cannot
+      // be expressed as its own line. Itemise when the numbers line up, and fall
+      // back to a single net-priced line when they can't (i.e. a voucher was
+      // used, or float rounding leaves a cent unaccounted for).
+      const toCents = (n: number) => Math.round(n * 100);
+
+      const itemisedLines = items.map((item: { product_name: string; quantity: number; unit_price: number }) => ({
+        name: item.product_name,
+        quantity: item.quantity,
+        price: item.unit_price,
+      }));
+
+      if (serverShippingCost > 0) {
+        itemisedLines.push({ name: "Shipping", quantity: 1, price: serverShippingCost });
+      }
+
+      const itemisedCents = itemisedLines.reduce(
+        (sum: number, l: { quantity: number; price: number }) => sum + toCents(l.price) * l.quantity,
+        0,
+      );
+
+      const dokuLineItems = itemisedCents === toCents(serverTotal)
+        ? itemisedLines
+        : [{
+            name: voucher_code ? `Order ${orderNumber} (${voucher_code} applied)` : `Order ${orderNumber}`,
+            quantity: 1,
+            price: serverTotal,
+          }];
+
       const dokuBody = {
         id: checkoutId,
         order: {
@@ -334,11 +368,7 @@ export async function POST(request: Request) {
           invoice_number: orderNumber,
           currency: "MYR",
           expired_at: expiredAt,
-          line_items: items.map((item: { product_name: string; quantity: number; unit_price: number }) => ({
-            name: item.product_name,
-            quantity: item.quantity,
-            price: item.unit_price,
-          })),
+          line_items: dokuLineItems,
         },
         customer: {
           name: shipping.name,
@@ -376,8 +406,11 @@ export async function POST(request: Request) {
       });
 
       if (!dokuRes.ok) {
-        const errData = await dokuRes.json().catch(() => ({}));
-        console.error("DOKU checkout error:", errData);
+        const errText = await dokuRes.text().catch(() => "");
+        console.error(
+          `DOKU checkout failed [${dokuRes.status}] order=${orderNumber} amount=${serverTotal} lines=${dokuLineItems.length}:`,
+          errText,
+        );
         return Response.json({ error: "Failed to create DOKU checkout" }, { status: 500 });
       }
 
