@@ -2,11 +2,19 @@ import { cookies } from "next/headers";
 import { createHmac, createHash } from "crypto";
 
 /**
- * Admin-only DOKU auth probe. Sends a minimal checkout request using each
- * candidate Authorization scheme and reports DOKU's raw response for each, so
- * the working combination can be identified without guessing in production.
+ * Admin-only DOKU probe.
  *
- * Returns only DOKU's response — never the credentials themselves.
+ * Auth is settled: the API Key authenticates (Basic base64(apiKey)); the Secret
+ * Key only signs. See git history for the evidence.
+ *
+ * This now pins down the expected amount format. Getting it wrong is dangerous
+ * in opposite directions — sending minor units when DOKU wants ringgit
+ * undercharges 100x, and the reverse overcharges 100x — so rather than assume,
+ * each representation is sent for a known RM 12.34 order and DOKU's own answer
+ * decides it. A variant that succeeds echoes back the amount it recorded, which
+ * is what actually confirms the magnitude.
+ *
+ * Returns only DOKU's responses — never the credentials themselves.
  */
 export async function GET() {
   const cookieStore = await cookies();
@@ -19,35 +27,39 @@ export async function GET() {
   const apiKey = process.env.DOKU_API_KEY;
   const baseUrl = process.env.DOKU_API_URL || "https://api-sandbox.doku.com";
 
-  if (!clientId || !secretKey) {
-    return Response.json({ error: "DOKU_CLIENT_ID / DOKU_SECRET_KEY not set" }, { status: 500 });
+  if (!clientId || !secretKey || !apiKey) {
+    return Response.json(
+      { error: "DOKU_CLIENT_ID / DOKU_SECRET_KEY / DOKU_API_KEY must all be set" },
+      { status: 500 },
+    );
   }
 
-  const b64 = (s: string) => Buffer.from(s).toString("base64");
+  const authorization = `Basic ${Buffer.from(apiKey).toString("base64")}`;
 
-  if (!apiKey) {
-    return Response.json({ error: "DOKU_API_KEY not set — it is what authenticates the request" }, { status: 500 });
-  }
-
-  // Auth is settled (API key). This now exercises the real checkout payload so a
-  // successful run returns an actual checkout_url — no customer needed to test.
-  const candidates: { label: string; authorization: string }[] = [
-    { label: "Basic base64(apiKey) — full payload", authorization: `Basic ${b64(apiKey)}` },
+  // One real-world-ish amount, expressed every plausible way. 12.34 is chosen so
+  // ringgit and minor units can't be confused for each other in the response.
+  const variants: { label: string; amount: unknown; price: unknown }[] = [
+    { label: "minor units, integer (1234 = RM12.34)", amount: 1234, price: 1234 },
+    { label: "ringgit, decimal (12.34)", amount: 12.34, price: 12.34 },
+    { label: "ringgit, string (\"12.34\")", amount: "12.34", price: "12.34" },
+    { label: "ringgit, whole integer (12)", amount: 12, price: 12 },
+    { label: "minor units, string (\"1234\")", amount: "1234", price: "1234" },
   ];
 
-  const results = [];
+  const results: Record<string, unknown>[] = [];
 
-  for (const candidate of candidates) {
+  for (const variant of variants) {
     const requestId = crypto.randomUUID();
     const timestamp = new Date().toISOString();
+
     const body = {
       id: requestId,
       order: {
-        amount: 1,
-        invoice_number: `DIAG-${Date.now()}`,
+        amount: variant.amount,
+        invoice_number: `DIAG-${Date.now()}-${results.length}`,
         currency: "MYR",
         expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        line_items: [{ name: "Diagnostic", quantity: 1, price: 1 }],
+        line_items: [{ name: "Diagnostic", quantity: 1, price: variant.price }],
       },
       customer: {
         name: "Diagnostic",
@@ -79,23 +91,50 @@ export async function GET() {
           "Request-Id": requestId,
           "Request-Timestamp": timestamp,
           "Signature": `HMACSHA256=${signature}`,
-          "Authorization": candidate.authorization,
+          "Authorization": authorization,
           "API-Version": "arabica.2025-12-01",
         },
         body: bodyString,
       });
 
       const text = await res.text();
-      results.push({ scheme: candidate.label, status: res.status, response: text.slice(0, 600) });
+
+      if (res.ok) {
+        // Surface what DOKU actually recorded — this is the magnitude check.
+        let echoedAmount: unknown = null;
+        let checkoutUrl: unknown = null;
+        try {
+          const parsed = JSON.parse(text);
+          echoedAmount = parsed?.order?.amount ?? null;
+          checkoutUrl = parsed?.payment?.checkout_url ?? null;
+        } catch { /* fall through to raw */ }
+
+        results.push({
+          variant: variant.label,
+          sent: variant.amount,
+          status: res.status,
+          accepted: true,
+          doku_recorded_amount: echoedAmount,
+          checkout_url: checkoutUrl,
+          raw: text.slice(0, 400),
+        });
+      } else {
+        results.push({
+          variant: variant.label,
+          sent: variant.amount,
+          status: res.status,
+          accepted: false,
+          response: text.slice(0, 300),
+        });
+      }
     } catch (err) {
-      results.push({ scheme: candidate.label, status: 0, response: String(err) });
+      results.push({ variant: variant.label, sent: variant.amount, status: 0, accepted: false, response: String(err) });
     }
   }
 
   return Response.json({
     base_url: baseUrl,
-    client_id_prefix: clientId.slice(0, 8) + "…",
-    api_key_configured: !!apiKey,
+    note: "Order sent is RM 12.34. For any accepted variant, check doku_recorded_amount to confirm the magnitude before trusting it.",
     results,
   });
 }
