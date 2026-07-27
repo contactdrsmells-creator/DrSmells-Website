@@ -352,6 +352,7 @@ export async function POST(request: Request) {
           "Request-Id": checkoutId,
           "Request-Timestamp": timestamp,
           "Signature": `HMACSHA256=${signature}`,
+          "API-Version": "arabica.2025-12-01",
         },
         body: bodyString,
       });
