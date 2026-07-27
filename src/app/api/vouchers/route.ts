@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     end_date: body.end_date || null,
     active: body.active !== false,
     applicable_for_subscription: body.applicable_for_subscription === true,
+    free_shipping: body.free_shipping === true,
   });
 
   if (error) {
@@ -80,6 +81,7 @@ export async function PUT(request: Request) {
       end_date: body.end_date || null,
       active: body.active !== false,
       applicable_for_subscription: body.applicable_for_subscription === true,
+      free_shipping: body.free_shipping === true,
     })
     .eq("id", body.id);
 

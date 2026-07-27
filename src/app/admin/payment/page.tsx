@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Save, Loader2 } from "lucide-react";
 
 interface PaymentSettings {
-  senangpay_enabled: boolean;
   stripe_enabled: boolean;
   doku_enabled: boolean;
   shipping_cost: string;
@@ -14,7 +13,6 @@ interface PaymentSettings {
 
 export default function AdminPaymentPage() {
   const [settings, setSettings] = useState<PaymentSettings>({
-    senangpay_enabled: false,
     stripe_enabled: false,
     doku_enabled: false,
     shipping_cost: "10.00",
@@ -83,43 +81,6 @@ export default function AdminPaymentPage() {
       </div>
 
       <div className="space-y-6">
-        {/* SenangPay */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800">SenangPay</h2>
-              <p className="text-sm text-gray-500">Malaysian payment gateway — Online Banking, FPX, Credit/Debit Card</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.senangpay_enabled}
-                onChange={(e) => setSettings({ ...settings, senangpay_enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive"></div>
-            </label>
-          </div>
-          {settings.senangpay_enabled && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                <strong>Setup required:</strong> Add these environment variables to your Vercel project:
-              </p>
-              <ul className="text-sm text-yellow-700 mt-2 space-y-1 list-disc list-inside">
-                <li><code className="bg-yellow-100 px-1 rounded">SENANGPAY_MERCHANT_ID</code> — Your SenangPay merchant ID</li>
-                <li><code className="bg-yellow-100 px-1 rounded">SENANGPAY_SECRET_KEY</code> — Your SenangPay secret key</li>
-                <li><code className="bg-yellow-100 px-1 rounded">SENANGPAY_URL</code> — (optional) defaults to https://app.senangpay.my/payment</li>
-              </ul>
-              <p className="text-sm text-yellow-700 mt-2">
-                Set the <strong>Return URL</strong> in SenangPay dashboard to: <code className="bg-yellow-100 px-1 rounded">your-domain.com/api/webhooks/senangpay</code>
-              </p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Set the <strong>Callback URL</strong> to the same URL.
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Stripe */}
         <div className="bg-white rounded-xl border p-6">
           <div className="flex items-center justify-between mb-4">

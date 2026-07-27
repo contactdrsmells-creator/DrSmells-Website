@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       discount_value: voucher.discount_value,
       min_order_amount: voucher.min_order_amount,
       applicable_for_subscription: voucher.applicable_for_subscription ?? false,
+      free_shipping: voucher.free_shipping ?? false,
     });
   } catch {
     return Response.json({ valid: false, error: "Failed to validate voucher" });

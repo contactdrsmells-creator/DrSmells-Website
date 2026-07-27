@@ -22,7 +22,6 @@ export async function GET() {
 
     // Only return public-safe fields
     return Response.json({
-      senangpay_enabled: settings.senangpay_enabled === true || settings.senangpay_enabled === "true",
       stripe_enabled: settings.stripe_enabled === true || settings.stripe_enabled === "true",
       doku_enabled: settings.doku_enabled === true || settings.doku_enabled === "true",
       shipping_cost: settings.shipping_cost || "10.00",
@@ -31,7 +30,6 @@ export async function GET() {
     });
   } catch {
     return Response.json({
-      senangpay_enabled: false,
       stripe_enabled: false,
       doku_enabled: false,
       shipping_cost: "10.00",
@@ -58,7 +56,6 @@ export async function PUT(request: Request) {
       .upsert({
         key: "payment",
         value: {
-          senangpay_enabled: !!body.senangpay_enabled,
           stripe_enabled: !!body.stripe_enabled,
           doku_enabled: !!body.doku_enabled,
           shipping_cost: body.shipping_cost || "10.00",

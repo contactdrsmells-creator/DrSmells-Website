@@ -15,6 +15,7 @@ interface Voucher {
   end_date: string | null;
   active: boolean;
   applicable_for_subscription: boolean;
+  free_shipping: boolean;
   created_at: string;
 }
 
@@ -28,6 +29,7 @@ const emptyVoucher = {
   end_date: "",
   active: true,
   applicable_for_subscription: false,
+  free_shipping: false,
 };
 
 export default function AdminVouchersPage() {
@@ -71,6 +73,7 @@ export default function AdminVouchersPage() {
       end_date: v.end_date?.slice(0, 10) || "",
       active: v.active,
       applicable_for_subscription: v.applicable_for_subscription ?? false,
+      free_shipping: v.free_shipping ?? false,
     });
     setShowForm(true);
   }
@@ -80,7 +83,7 @@ export default function AdminVouchersPage() {
       alert("Voucher code is required");
       return;
     }
-    if (form.discount_value <= 0) {
+    if (form.discount_value <= 0 && !form.free_shipping) {
       alert("Discount value must be greater than 0");
       return;
     }
@@ -257,7 +260,7 @@ export default function AdminVouchersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div className="flex items-center gap-2">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -281,6 +284,18 @@ export default function AdminVouchersPage() {
                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive"></div>
                   </label>
                   <span className="text-sm text-gray-700">Apply to subscription</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.free_shipping}
+                      onChange={(e) => setForm({ ...form, free_shipping: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive"></div>
+                  </label>
+                  <span className="text-sm text-gray-700">Free shipping</span>
                 </div>
               </div>
             </div>

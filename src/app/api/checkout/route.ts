@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import { createHmac } from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -40,13 +39,13 @@ async function generateOrderNumber(): Promise<string> {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription, voucher_free_shipping } = body;
 
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    if (!["senangpay", "stripe", "doku"].includes(payment_method)) {
+    if (!["stripe", "doku"].includes(payment_method)) {
       return Response.json({ error: "Invalid payment method" }, { status: 400 });
     }
 
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
 
     const zones = shippingSettings?.value?.zones || [];
     const matchedZone = zones.find((z: { states: string[] }) => z.states.includes(shipping.state));
-    const serverShippingCost = matchedZone
+    let serverShippingCost = matchedZone
       ? (matchedZone.free_shipping_min > 0 && verifiedTotal >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
       : (shipping_cost || 0);
 
@@ -109,6 +108,10 @@ export async function POST(request: Request) {
           serverDiscount = voucher.discount_type === "percentage"
             ? Math.min(verifiedTotal * (voucher.discount_value / 100), verifiedTotal)
             : Math.min(voucher.discount_value, verifiedTotal);
+
+          if (voucher.free_shipping) {
+            serverShippingCost = 0;
+          }
 
           await supabase
             .from("vouchers")
@@ -153,36 +156,7 @@ export async function POST(request: Request) {
     // Generate payment redirect URL
     let redirect_url = "";
 
-    if (payment_method === "senangpay") {
-      const merchantId = process.env.SENANGPAY_MERCHANT_ID;
-      const secretKey = process.env.SENANGPAY_SECRET_KEY;
-
-      if (!merchantId || !secretKey) {
-        return Response.json({ error: "SenangPay not configured" }, { status: 500 });
-      }
-
-      const amountStr = serverTotal.toFixed(2);
-      const detail = `Dr.Smells Order ${orderNumber}`;
-      const name = shipping.name;
-      const email = shipping.email;
-      const phone = shipping.phone;
-
-      const hashString = secretKey + detail + amountStr + orderNumber;
-      const hash = createHmac("sha256", secretKey).update(hashString).digest("hex");
-
-      const senangpayUrl = process.env.SENANGPAY_URL || "https://app.senangpay.my/payment";
-      const params = new URLSearchParams({
-        detail,
-        amount: amountStr,
-        order_id: orderNumber,
-        name,
-        email,
-        phone,
-        hash,
-      });
-
-      redirect_url = `${senangpayUrl}/${merchantId}?${params.toString()}`;
-    } else if (payment_method === "stripe") {
+    if (payment_method === "stripe") {
       const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
       if (!stripeSecretKey) {
         return Response.json({ error: "Stripe not configured" }, { status: 500 });

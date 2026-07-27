@@ -18,6 +18,7 @@ export default function Cart() {
     code: string;
     discount_type: "percentage" | "fixed";
     discount_value: number;
+    free_shipping?: boolean;
   } | null>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState("");
@@ -182,9 +183,11 @@ export default function Cart() {
                     <Tag className="w-4 h-4 text-green-600" />
                     <span className="text-sm font-medium text-green-700">{appliedVoucher.code}</span>
                     <span className="text-xs text-green-600">
-                      ({appliedVoucher.discount_type === "percentage"
-                        ? `${appliedVoucher.discount_value}% off`
-                        : `RM${appliedVoucher.discount_value.toFixed(2)} off`})
+                      ({appliedVoucher.discount_value > 0
+                        ? appliedVoucher.discount_type === "percentage"
+                          ? `${appliedVoucher.discount_value}% off`
+                          : `RM${appliedVoucher.discount_value.toFixed(2)} off`
+                        : ""}{appliedVoucher.free_shipping ? (appliedVoucher.discount_value > 0 ? " + Free shipping" : "Free shipping") : ""})
                     </span>
                   </div>
                   <button onClick={removeVoucher} className="text-green-500 hover:text-green-700">

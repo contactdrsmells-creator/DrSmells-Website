@@ -14,7 +14,6 @@ const MALAYSIAN_STATES = [
 ];
 
 interface PaymentSettings {
-  senangpay_enabled: boolean;
   doku_enabled: boolean;
 }
 
@@ -32,6 +31,7 @@ interface VoucherResult {
   discount_type: "percentage" | "fixed";
   discount_value: number;
   min_order_amount: number;
+  free_shipping?: boolean;
   error?: string;
 }
 
@@ -45,7 +45,7 @@ export default function CheckoutPage() {
   const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"senangpay" | "doku">("doku");
+  const [paymentMethod, setPaymentMethod] = useState<"doku">("doku");
 
   const [voucherCode, setVoucherCode] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherResult | null>(null);
@@ -73,7 +73,6 @@ export default function CheckoutPage() {
         setPaymentSettings(payData);
         setShippingZones(shipData.zones || []);
         if (payData.doku_enabled) setPaymentMethod("doku");
-        else if (payData.senangpay_enabled) setPaymentMethod("senangpay");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -91,9 +90,11 @@ export default function CheckoutPage() {
   }
 
   const matchedZone = shippingZones.find((z) => z.states.includes(shipping.state));
-  const shippingCost = matchedZone
-    ? (matchedZone.free_shipping_min > 0 && totalPrice >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
-    : 0;
+  const shippingCost = appliedVoucher?.free_shipping
+    ? 0
+    : matchedZone
+      ? (matchedZone.free_shipping_min > 0 && totalPrice >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
+      : 0;
 
   const discount = appliedVoucher
     ? appliedVoucher.discount_type === "percentage"
@@ -227,7 +228,7 @@ export default function CheckoutPage() {
   }
 
   const hasSubscription = items.some((item) => item.subscription);
-  const noPaymentEnabled = !!paymentSettings && !paymentSettings.senangpay_enabled && !paymentSettings.doku_enabled && !hasSubscription;
+  const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !hasSubscription;
 
   return (
     <div className="min-h-screen bg-white">
@@ -369,22 +370,6 @@ export default function CheckoutPage() {
                         </div>
                       </label>
                     )}
-                    {paymentSettings?.senangpay_enabled && (
-                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="senangpay"
-                          checked={paymentMethod === "senangpay"}
-                          onChange={() => setPaymentMethod("senangpay")}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">SenangPay</p>
-                          <p className="text-xs text-olive/50">Online Banking, Credit/Debit Card (Malaysia)</p>
-                        </div>
-                      </label>
-                    )}
                   </div>
                 </div>
               )}
@@ -481,7 +466,10 @@ export default function CheckoutPage() {
                     <span>Shipping{shipping.state && matchedZone ? ` (${matchedZone.name})` : ""}</span>
                     <span>{!shipping.state ? "Select state" : shippingCost === 0 ? "FREE" : `RM ${shippingCost.toFixed(2)}`}</span>
                   </div>
-                  {shippingCost === 0 && shipping.state && matchedZone && matchedZone.free_shipping_min > 0 && (
+                  {shippingCost === 0 && shipping.state && appliedVoucher?.free_shipping && (
+                    <p className="text-xs text-green-600">Free shipping applied via voucher</p>
+                  )}
+                  {shippingCost === 0 && shipping.state && matchedZone && matchedZone.free_shipping_min > 0 && !appliedVoucher?.free_shipping && (
                     <p className="text-xs text-green-600">Free shipping on orders above RM {matchedZone.free_shipping_min.toFixed(2)}</p>
                   )}
                   <div className="flex justify-between text-lg font-bold text-olive pt-2 border-t border-olive/10">
