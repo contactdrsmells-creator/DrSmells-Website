@@ -101,7 +101,9 @@
       "Bash(dig @8.8.8.8 +short www.drsmells.com.my)",
       "Bash(dig @1.1.1.1 +short drsmells.com.my A)",
       "Bash(curl -s https://drsmells-website.vercel.app/api/payment-settings)",
-      "Bash(curl -sI --resolve drsmells.com.my:443:216.198.79.1 https://drsmells.com.my)"
+      "Bash(curl -sI --resolve drsmells.com.my:443:216.198.79.1 https://drsmells.com.my)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('nodemailer:', p.dependencies.nodemailer, '| types:', p.devDependencies['@types/nodemailer']||p.dependencies['@types/nodemailer']\\)\")"
     ]
   }
 }

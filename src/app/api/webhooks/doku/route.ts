@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { syncOrderToCRM } from "@/lib/crm-sync";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 
 function getSupabase() {
   return createClient(
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
       await syncOrderToCRM(invoiceNumber).catch((err) =>
         console.error("[CRM Sync] Error in DOKU webhook:", err)
       );
+
+      await sendOrderConfirmationEmail(invoiceNumber);
     } else if (paymentStatus === "PENDING" || paymentStatus === "AUTHORIZED") {
       await supabase
         .from("orders")
