@@ -352,7 +352,7 @@ export async function POST(request: Request) {
           "Request-Id": checkoutId,
           "Request-Timestamp": timestamp,
           "Signature": `HMACSHA256=${signature}`,
-          "Authorization": `Bearer ${dokuSecretKey}`,
+          "Authorization": `Basic ${Buffer.from(dokuSecretKey).toString("base64")}`,
           "API-Version": "arabica.2025-12-01",
         },
         body: bodyString,
