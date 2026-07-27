@@ -29,26 +29,71 @@ export async function POST(request: Request) {
 
     const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 
+    const supabase = getSupabase();
+
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object as { metadata?: { order_number?: string }; payment_intent?: string; id?: string };
+      const session = event.data.object as { metadata?: { order_number?: string }; payment_intent?: string; id?: string; subscription?: string };
       const orderNumber = session.metadata?.order_number;
 
       if (orderNumber) {
-        const supabase = getSupabase();
+        const updateData: Record<string, string> = {
+          status: "paid",
+          payment_status: "paid",
+          payment_reference: (session.payment_intent as string) || session.id || "",
+          updated_at: new Date().toISOString(),
+        };
+        if (session.subscription) {
+          updateData.stripe_subscription_id = session.subscription as string;
+        }
+
         await supabase
           .from("orders")
-          .update({
-            status: "paid",
-            payment_status: "paid",
-            payment_reference: (session.payment_intent as string) || session.id,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq("order_number", orderNumber);
 
-        // Sync paid order to CRM
         await syncOrderToCRM(orderNumber).catch((err) =>
           console.error("[CRM Sync] Error in Stripe webhook:", err)
         );
+      }
+    } else if (event.type === "invoice.paid") {
+      const invoice = event.data.object as { subscription?: string; subscription_details?: { metadata?: { order_number?: string } } };
+      const orderNumber = invoice.subscription_details?.metadata?.order_number;
+
+      if (orderNumber) {
+        await supabase
+          .from("orders")
+          .update({
+            payment_status: "paid",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_number", orderNumber);
+      }
+    } else if (event.type === "invoice.payment_failed") {
+      const invoice = event.data.object as { subscription_details?: { metadata?: { order_number?: string } } };
+      const orderNumber = invoice.subscription_details?.metadata?.order_number;
+
+      if (orderNumber) {
+        await supabase
+          .from("orders")
+          .update({
+            payment_status: "failed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_number", orderNumber);
+      }
+    } else if (event.type === "customer.subscription.deleted") {
+      const subscription = event.data.object as { metadata?: { order_number?: string } };
+      const orderNumber = subscription.metadata?.order_number;
+
+      if (orderNumber) {
+        await supabase
+          .from("orders")
+          .update({
+            status: "cancelled",
+            payment_status: "cancelled",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("order_number", orderNumber);
       }
     }
 
