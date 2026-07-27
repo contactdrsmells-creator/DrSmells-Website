@@ -15,6 +15,7 @@ const MALAYSIAN_STATES = [
 
 interface PaymentSettings {
   doku_enabled: boolean;
+  stripe_enabled: boolean;
 }
 
 interface ShippingZone {
@@ -45,7 +46,7 @@ export default function CheckoutPage() {
   const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"doku">("doku");
+  const [paymentMethod, setPaymentMethod] = useState<"doku" | "stripe">("doku");
 
   const [voucherCode, setVoucherCode] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherResult | null>(null);
@@ -73,6 +74,7 @@ export default function CheckoutPage() {
         setPaymentSettings(payData);
         setShippingZones(shipData.zones || []);
         if (payData.doku_enabled) setPaymentMethod("doku");
+        else if (payData.stripe_enabled) setPaymentMethod("stripe");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -228,7 +230,7 @@ export default function CheckoutPage() {
   }
 
   const hasSubscription = items.some((item) => item.subscription);
-  const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !hasSubscription;
+  const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !paymentSettings.stripe_enabled && !hasSubscription;
 
   return (
     <div className="min-h-screen bg-white">
@@ -367,6 +369,22 @@ export default function CheckoutPage() {
                         <div>
                           <p className="font-medium text-olive">DOKU</p>
                           <p className="text-xs text-olive/50">FPX, E-Wallet, BNPL, Credit/Debit Card (Malaysia)</p>
+                        </div>
+                      </label>
+                    )}
+                    {paymentSettings?.stripe_enabled && (
+                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="stripe"
+                          checked={paymentMethod === "stripe"}
+                          onChange={() => setPaymentMethod("stripe")}
+                          className="accent-olive"
+                        />
+                        <div>
+                          <p className="font-medium text-olive">Credit / Debit Card</p>
+                          <p className="text-xs text-olive/50">Visa, Mastercard — secured by Stripe</p>
                         </div>
                       </label>
                     )}

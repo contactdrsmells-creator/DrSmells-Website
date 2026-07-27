@@ -84,7 +84,17 @@
       "Bash(curl -s -w ' HTTP:%{http_code}' -X POST https://drsmells-crm.vercel.app/api/webhook/website-order -H 'Content-Type: application/json' -H 'x-webhook-secret: drsmells_webhook_2026' -d '{\"customer_name\":\"Should Fail\",\"phone\":\"+60000000000\"}')",
       "Bash(ls /Users/kai/Desktop/DrSmells-CRM/pages/api/webhook/)",
       "mcp__visualize__read_me",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "Bash(pandoc -t markdown \"/Users/kai/Downloads/API x  LIFE BIO LAB SDN BHD.docx\")",
+      "Bash(python3 -c ' *)",
+      "Bash(ls /Users/kai/Desktop/drsmellscrm/ 2>/dev/null)",
+      "Bash(node -e ' *)",
+      "Bash(grep -iA3 \"doku\\\\|error\")",
+      "Bash(dig +short drsmells.com.my A)",
+      "Bash(dig +short www.drsmells.com.my)",
+      "Bash(dig +short drsmells.com.my NS)",
+      "Bash(dig +short drsmells-website.vercel.app)",
+      "Bash(curl -sI https://drsmells.com.my)"
     ]
   }
 }

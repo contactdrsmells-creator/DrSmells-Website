@@ -216,20 +216,21 @@ export async function POST(request: Request) {
           });
         }
 
-        if (serverDiscount > 0) {
-          lineItems.push({
-            price_data: {
+        // Stripe rejects negative line items — a one-off coupon is the supported
+        // way to apply a voucher discount.
+        const discounts = serverDiscount > 0
+          ? [{ coupon: (await stripe.coupons.create({
+              amount_off: Math.round(serverDiscount * 100),
               currency: "myr",
-              product_data: { name: "Discount" },
-              unit_amount: Math.round(serverDiscount * -100),
-            },
-            quantity: 1,
-          });
-        }
+              duration: "once",
+              name: voucher_code || "Discount",
+            })).id }]
+          : undefined;
 
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
           line_items: lineItems,
+          discounts,
           mode: "subscription",
           success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${origin}/checkout`,
@@ -275,9 +276,21 @@ export async function POST(request: Request) {
           });
         }
 
+        // Without this the voucher discount is silently dropped and the customer
+        // is charged the full amount.
+        const discounts = serverDiscount > 0
+          ? [{ coupon: (await stripe.coupons.create({
+              amount_off: Math.round(serverDiscount * 100),
+              currency: "myr",
+              duration: "once",
+              name: voucher_code || "Discount",
+            })).id }]
+          : undefined;
+
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
           line_items: lineItems,
+          discounts,
           mode: "payment",
           success_url: `${origin}/order-confirmation?order=${orderNumber}&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${origin}/checkout`,
