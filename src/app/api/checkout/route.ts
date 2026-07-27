@@ -338,7 +338,7 @@ export async function POST(request: Request) {
         },
       };
 
-      const authorization = Buffer.from(dokuSecretKey).toString("base64");
+      const authorization = Buffer.from(`${dokuClientId}:${dokuSecretKey}`).toString("base64");
 
       const dokuRes = await fetch(`${dokuBaseUrl}/v3/checkouts`, {
         method: "POST",
