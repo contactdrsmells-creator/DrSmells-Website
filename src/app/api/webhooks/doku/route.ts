@@ -70,14 +70,18 @@ export async function POST(request: Request) {
 
 // DOKU may also redirect via GET for result callbacks
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const invoiceNumber = searchParams.get("invoice_number") || searchParams.get("order");
+  const url = new URL(request.url);
+  const invoiceNumber = url.searchParams.get("invoice_number") || url.searchParams.get("order");
+
+  // Derive the origin from the request rather than NEXT_PUBLIC_SITE_URL, which
+  // is unset in production and would have sent customers to localhost.
+  const origin = url.origin;
 
   if (invoiceNumber) {
-    // Redirect to order confirmation
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
     return Response.redirect(`${origin}/order-confirmation?order=${invoiceNumber}`);
   }
 
-  return Response.json({ error: "Missing order reference" }, { status: 400 });
+  // A person reached this URL, not DOKU's server. Send them to the shop rather
+  // than showing raw JSON.
+  return Response.redirect(origin, 302);
 }

@@ -386,7 +386,11 @@ export async function POST(request: Request) {
         checkout_experience: {
           language: "EN",
           auto_redirect: true,
-          callback_url: `${origin}/api/webhooks/doku`,
+          // These are all customer-facing redirects — "Back to Merchant" uses
+          // callback_url. Payment notifications go to the endpoint configured in
+          // the DOKU dashboard, not here; pointing this at the webhook showed
+          // customers a raw JSON error when they clicked back.
+          callback_url: `${origin}/order-confirmation?order=${orderNumber}`,
           callback_url_cancel: `${origin}/checkout`,
           callback_url_result: `${origin}/order-confirmation?order=${orderNumber}`,
         },
