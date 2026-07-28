@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem, Product } from "./types";
+import { resolveUnitPrice } from "./pricing";
 
 interface SubscriptionInfo {
   interval_months: number;
@@ -86,27 +87,7 @@ export const useCartStore = create<CartStore>()(
           if (item.subscription) {
             return sum + item.subscription.price * item.quantity;
           }
-          // Check multi-attribute combo first
-          const combos = item.product.variation_combos || [];
-          if (combos.length > 0 && item.selectedSize.includes(": ")) {
-            const selections: Record<string, string> = {};
-            item.selectedSize.split(" | ").forEach(part => {
-              const [k, v] = part.split(": ");
-              if (k && v) selections[k] = v;
-            });
-            const combo = combos.find(c =>
-              Object.keys(selections).every(k => c.selections[k] === selections[k])
-            );
-            if (combo) {
-              return sum + (combo.sale_price ?? combo.price) * item.quantity;
-            }
-          }
-          // Fallback to simple variation
-          const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
-          const price = variation
-            ? (variation.sale_price ?? variation.price)
-            : (item.product.sale_price ?? item.product.price);
-          return sum + price * item.quantity;
+          return sum + resolveUnitPrice(item.product, item.selectedSize) * item.quantity;
         }, 0),
     }),
     { name: "drsmells-cart" }

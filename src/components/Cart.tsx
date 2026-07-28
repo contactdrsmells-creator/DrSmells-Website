@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Plus, Minus, Trash2, Tag, Loader2 } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
+import { resolveUnitPrice } from "@/lib/pricing";
 import { useRouter } from "next/navigation";
 
 export default function Cart() {
@@ -117,24 +118,10 @@ export default function Cart() {
                     )}
                     <p className="text-sm font-semibold text-olive mt-1">
                       RM{" "}
-                      {(() => {
-                        if (item.subscription) return (item.subscription.price * item.quantity).toFixed(2);
-                        const combos = item.product.variation_combos || [];
-                        if (combos.length > 0 && item.selectedSize.includes(": ")) {
-                          const selections: Record<string, string> = {};
-                          item.selectedSize.split(" | ").forEach(part => {
-                            const [k, v] = part.split(": ");
-                            if (k && v) selections[k] = v;
-                          });
-                          const combo = combos.find(c =>
-                            Object.keys(selections).every(k => c.selections[k] === selections[k])
-                          );
-                          if (combo) return ((combo.sale_price ?? combo.price) * item.quantity).toFixed(2);
-                        }
-                        const v = (item.product.variations || []).find((v) => v.name === item.selectedSize);
-                        const p = v ? (v.sale_price ?? v.price) : (item.product.sale_price ?? item.product.price);
-                        return (p * item.quantity).toFixed(2);
-                      })()}
+                      {(item.subscription
+                        ? item.subscription.price * item.quantity
+                        : resolveUnitPrice(item.product, item.selectedSize) * item.quantity
+                      ).toFixed(2)}
                       {item.subscription && <span className="text-xs font-normal text-olive/50"> / month</span>}
                     </p>
 

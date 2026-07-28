@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, createHash } from "crypto";
+import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     for (const item of items) {
       const { data: product } = await supabase
         .from("products")
-        .select("price, sale_price, variations")
+        .select("price, sale_price, variations, variation_combos")
         .eq("id", item.product_id)
         .single();
 
@@ -65,10 +66,15 @@ export async function POST(request: Request) {
         return Response.json({ error: `Product not found: ${item.product_name}` }, { status: 400 });
       }
 
-      const variation = (product.variations || []).find((v: { name: string; price: number; sale_price?: number | null }) => v.name === item.variation);
-      const serverPrice = variation
-        ? (variation.sale_price ?? variation.price)
-        : (product.sale_price ?? product.price);
+      // Bundles price via variation_combos and have no variations at all, so
+      // resolving by variation name alone silently fell back to the base price
+      // and rejected every bundle order as a price mismatch.
+      //
+      // Subscription prices are resolved from the product too — never taken
+      // from the request, which would let a caller set its own recurring price.
+      const serverPrice = item.subscription
+        ? (resolveSubscriptionPrice(product, item.variation) ?? resolveUnitPrice(product, item.variation))
+        : resolveUnitPrice(product, item.variation);
 
       verifiedTotal += serverPrice * item.quantity;
     }

@@ -6,6 +6,7 @@ import { useCartStore } from "@/lib/cart-store";
 import { ShippingAddress } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
+import { resolveUnitPrice } from "@/lib/pricing";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -157,15 +158,12 @@ export default function CheckoutPage() {
 
     try {
       const orderItems = items.map((item) => {
-        let unitPrice: number;
-        if (item.subscription) {
-          unitPrice = item.subscription.price;
-        } else {
-          const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
-          unitPrice = variation
-            ? (variation.sale_price ?? variation.price)
-            : (item.product.sale_price ?? item.product.price);
-        }
+        // Must match how the cart totals the line, or the server rejects the
+        // order as a price mismatch and DOKU rejects the line items as
+        // "AMOUNT NOT MATCH".
+        const unitPrice = item.subscription
+          ? item.subscription.price
+          : resolveUnitPrice(item.product, item.selectedSize);
         return {
           product_id: item.product.id,
           product_name: item.product.name,
@@ -399,12 +397,9 @@ export default function CheckoutPage() {
                 <h2 className="text-lg font-semibold text-olive mb-4">Order Summary</h2>
                 <div className="space-y-3 mb-6">
                   {items.map((item) => {
-                    const variation = (item.product.variations || []).find((v) => v.name === item.selectedSize);
                     const unitPrice = item.subscription
                       ? item.subscription.price
-                      : variation
-                        ? (variation.sale_price ?? variation.price)
-                        : (item.product.sale_price ?? item.product.price);
+                      : resolveUnitPrice(item.product, item.selectedSize);
                     return (
                       <div key={`${item.product.id}-${item.selectedSize}`} className="flex gap-3">
                         <div className="w-14 h-14 bg-white rounded-md flex-shrink-0 overflow-hidden">
