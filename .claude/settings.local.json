@@ -105,7 +105,10 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\).join\\(', '\\)\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('nodemailer:', p.dependencies.nodemailer, '| types:', p.devDependencies['@types/nodemailer']||p.dependencies['@types/nodemailer']\\)\")",
       "Bash(npx tsx -e ' *)",
-      "Bash(find ~/Downloads ~/Desktop -maxdepth 1 \\\\\\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" -o -iname \"*.svg\" \\\\\\) -newermt \"-3 days\" 2>/dev/null | head -15)"
+      "Bash(find ~/Downloads ~/Desktop -maxdepth 1 \\\\\\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" -o -iname \"*.svg\" \\\\\\) -newermt \"-3 days\" 2>/dev/null | head -15)",
+      "Bash(python3 -c \"import PIL; print\\('PIL', PIL.__version__\\)\")",
+      "Bash(node -e \"require\\('sharp'\\)\")",
+      "Bash(mv icon-round.png icon.png)"
     ]
   }
 }
