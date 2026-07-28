@@ -179,12 +179,16 @@ export async function sendOrderConfirmationEmail(orderNumber: string): Promise<v
     }
 
     const from = process.env.MAIL_FROM || process.env.SMTP_USER!;
+    // The sending domain must be verified with the mail provider, but replies
+    // should reach a real monitored mailbox — which may be a different address
+    // entirely. Without this, replies to a send-only address bounce.
+    const replyTo = process.env.MAIL_REPLY_TO || from;
 
     await transport.sendMail({
       from: `Dr.Smells <${from}>`,
       to,
       bcc: process.env.MAIL_BCC || undefined,
-      replyTo: from,
+      replyTo,
       subject: `Order confirmed — ${order.order_number}`,
       html: buildHtml(order),
     });
