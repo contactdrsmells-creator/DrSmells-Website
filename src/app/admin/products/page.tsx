@@ -841,8 +841,40 @@ export default function AdminProducts() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="text-sm font-medium">RM {product.price.toFixed(2)}</span>
-                  {product.sale_price && <span className="text-xs text-red-500 ml-1">(RM {product.sale_price.toFixed(2)})</span>}
+                  {(() => {
+                    // Bundles price entirely through variation_combos and never use
+                    // the base price, so showing product.price here listed every
+                    // bundle at RM49.90 regardless of what it actually sells for.
+                    // Mirrors how the storefront displays a range.
+                    const comboPrices = (product.variation_combos || []).map((c) => c.sale_price ?? c.price);
+                    if (comboPrices.length > 0) {
+                      const min = Math.min(...comboPrices);
+                      const max = Math.max(...comboPrices);
+                      return (
+                        <span className="text-sm font-medium">
+                          {min === max ? `RM ${min.toFixed(2)}` : `RM ${min.toFixed(2)} – RM ${max.toFixed(2)}`}
+                        </span>
+                      );
+                    }
+
+                    const variationPrices = (product.variations || []).map((v) => v.sale_price ?? v.price);
+                    if (variationPrices.length > 0) {
+                      const min = Math.min(...variationPrices);
+                      const max = Math.max(...variationPrices);
+                      return (
+                        <span className="text-sm font-medium">
+                          {min === max ? `RM ${min.toFixed(2)}` : `RM ${min.toFixed(2)} – RM ${max.toFixed(2)}`}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <span className="text-sm font-medium">RM {product.price.toFixed(2)}</span>
+                        {product.sale_price && <span className="text-xs text-red-500 ml-1">(RM {product.sale_price.toFixed(2)})</span>}
+                      </>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-1 rounded-full ${product.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
