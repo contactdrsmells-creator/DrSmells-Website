@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 import { resolveUnitPrice } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/components/MetaPixel";
+import { getOrderSource } from "@/lib/attribution";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -201,10 +202,10 @@ export default function CheckoutPage() {
           voucher_code: appliedVoucher?.code || null,
           total: orderTotal,
           has_subscription: hasSubscription,
-          source: (() => {
-            const params = new URLSearchParams(window.location.search);
-            return params.get("utm_source") || params.get("ref") || "Direct";
-          })(),
+          // Read from stored first-touch attribution. Reading the checkout URL
+          // directly recorded everything as "Direct", because the campaign
+          // parameters are on the landing page and gone by this point.
+          source: getOrderSource(),
         }),
       });
 

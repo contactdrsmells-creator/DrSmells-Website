@@ -1,6 +1,8 @@
 "use client";
 
 import Script from "next/script";
+import { useEffect } from "react";
+import { captureAttribution } from "@/lib/attribution";
 
 /**
  * Meta (Facebook) Pixel.
@@ -22,6 +24,12 @@ declare global {
 }
 
 export default function MetaPixel() {
+  // Runs on every page, so this is where first-touch attribution is captured —
+  // it has to happen on the landing page, not at checkout.
+  useEffect(() => {
+    captureAttribution();
+  }, []);
+
   if (!META_PIXEL_ID) return null;
 
   return (
