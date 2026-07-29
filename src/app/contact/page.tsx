@@ -19,6 +19,9 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
   tiktok: (
     <path d="M16.6 5.8a4.8 4.8 0 0 1-1-2.8h-3v11.7a2.5 2.5 0 1 1-1.8-2.4V9.2a5.5 5.5 0 1 0 4.8 5.5V9.4a7.9 7.9 0 0 0 4.6 1.5V7.9a4.7 4.7 0 0 1-3.6-2.1Z" />
   ),
+  whatsapp: (
+    <path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.6.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.5.3-.5v-.5l-.9-2.1c-.2-.5-.4-.5-.6-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.2-.6-.4ZM12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2Z" />
+  ),
 };
 
 export default function ContactPage() {
@@ -109,15 +112,18 @@ export default function ContactPage() {
             </div>
 
             {/* Social links — only those actually set in Site Settings */}
-            {(social.facebook || social.instagram || social.tiktok) && (
+            {(social.facebook || social.instagram || social.tiktok || whatsappLink) && (
               <div className="mt-8">
                 <p className="font-semibold text-olive mb-3">Follow Us</p>
                 <div className="flex items-center gap-3">
-                  {(["facebook", "instagram", "tiktok"] as const).map((key) =>
-                    social[key] ? (
+                  {(["facebook", "instagram", "tiktok", "whatsapp"] as const).map((key) => {
+                    // WhatsApp falls back to a wa.me link built from the contact
+                    // number if no explicit link is saved in Site Settings.
+                    const href = key === "whatsapp" ? social.whatsapp || whatsappLink : social[key];
+                    return href ? (
                       <a
                         key={key}
-                        href={social[key]}
+                        href={href}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={key}
@@ -127,24 +133,12 @@ export default function ContactPage() {
                           {SOCIAL_ICONS[key]}
                         </svg>
                       </a>
-                    ) : null,
-                  )}
+                    ) : null;
+                  })}
                 </div>
               </div>
             )}
 
-            <div className="mt-10 p-6 bg-sage-light rounded-2xl">
-              <h3 className="font-semibold text-olive mb-2">
-                Business Hours
-              </h3>
-              <p className="text-sm text-olive/60">
-                Monday - Friday: 9:00 AM - 6:00 PM
-              </p>
-              <p className="text-sm text-olive/60">
-                Saturday: 9:00 AM - 1:00 PM
-              </p>
-              <p className="text-sm text-olive/60">Sunday: Closed</p>
-            </div>
           </div>
 
           {/* Contact Form */}
