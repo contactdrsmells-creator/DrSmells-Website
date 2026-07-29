@@ -59,7 +59,10 @@ export async function POST(request: Request) {
     const body = String(r.body || "").trim().slice(0, 2000);
     const product_id = String(r.product_id || "").trim();
 
-    if (!name || !email || !product_id || isNaN(rating) || rating < 1 || rating > 5) {
+    // Email is optional on import — imported reviews often come from sources
+    // that never captured one. The column is NOT NULL, so an empty string
+    // stands in. Reviews submitted on the site still require a valid email.
+    if (!name || !product_id || isNaN(rating) || rating < 1 || rating > 5) {
       continue; // Skip invalid rows
     }
 
@@ -87,7 +90,7 @@ export async function POST(request: Request) {
 
   if (validReviews.length === 0) {
     return Response.json(
-      { error: "No valid reviews found. Each review needs: name, email, product_id, rating (1-5)." },
+      { error: "No valid reviews found. Each review needs: name, product_id, rating (1-5). Email is optional." },
       { status: 400 }
     );
   }

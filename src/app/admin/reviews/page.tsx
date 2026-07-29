@@ -549,7 +549,9 @@ export default function AdminReviews() {
                     <span className="text-sm font-semibold text-gray-800">
                       {review.name}
                     </span>
-                    <span className="text-xs text-gray-400">{review.email}</span>
+                    {/* Imported reviews may have no email — omit rather than
+                        render an empty gap next to the name. */}
+                    {review.email && <span className="text-xs text-gray-400">{review.email}</span>}
                     {review.verified && (
                       <span className="flex items-center gap-1 text-xs text-green-600">
                         <ShieldCheck className="w-3 h-3" /> Verified
