@@ -334,9 +334,15 @@ export default function ProductPage() {
                   }`}>
                     {purchaseType === "subscribe" && <span className="w-2.5 h-2.5 rounded-full bg-olive" />}
                   </span>
+                  {/* Once a variation is chosen this must show that variation's
+                      price — it previously kept showing the cheapest across all
+                      of them, so it disagreed with the Add to Cart button.
+                      "from" + lowest is only right before a selection. */}
                   <span className="text-sm text-olive">
-                    <span className="font-medium">Subscribe from</span>
-                    {allAttrsSelected && <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>RM{(lowestSubPrice ?? subPrice).toFixed(2)} / month</span>}
+                    <span className="font-medium">{allAttrsSelected ? "Subscribe" : "Subscribe from"}</span>
+                    <span className="font-bold ml-1" style={{ color: "#9a8c2c" }}>
+                      RM{(allAttrsSelected ? subPrice : (lowestSubPrice ?? subPrice)).toFixed(2)} / month
+                    </span>
                   </span>
                 </button>
 
