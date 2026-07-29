@@ -22,6 +22,21 @@ function OrderConfirmationContent() {
       return;
     }
 
+    // The customer can land here before the gateway's webhook has marked the
+    // order paid — DOKU redirects immediately, the notification arrives a beat
+    // later. Checking once would show "waiting for payment confirmation" to
+    // someone who has already paid, and would skip the Meta Purchase event
+    // entirely. So re-check for a short while and settle as soon as it flips.
+    let cancelled = false;
+    const POLL_INTERVAL_MS = 2000;
+    const POLL_TIMEOUT_MS = 20000;
+
+    async function fetchOrder() {
+      const res = await fetch(`/api/orders?order_number=${orderNumber}`);
+      const data = await res.json().catch(() => ({}));
+      return data.order || null;
+    }
+
     async function load() {
       if (sessionId) {
         await fetch("/api/verify-stripe-session", {
@@ -31,22 +46,37 @@ function OrderConfirmationContent() {
         }).catch(() => {});
       }
 
-      const res = await fetch(`/api/orders?order_number=${orderNumber}`);
-      const data = await res.json();
-      if (data.order) {
-        setOrder(data.order);
+      const startedAt = Date.now();
 
-        // Report the sale to Meta only once payment is actually confirmed —
-        // firing on page load alone would count abandoned and failed payments
-        // as revenue.
-        if (data.order.payment_status === "paid") {
-          trackPurchase(data.order.order_number, data.order.total, data.order.items || []);
+      while (!cancelled) {
+        const fetched = await fetchOrder().catch(() => null);
+
+        if (fetched) {
+          setOrder(fetched);
+          setLoading(false);
+
+          if (fetched.payment_status === "paid") {
+            // trackPurchase is idempotent per order number, so the repeated
+            // checks here cannot report the same sale twice.
+            trackPurchase(fetched.order_number, fetched.total, fetched.items || []);
+            return;
+          }
+        } else {
+          setLoading(false);
         }
+
+        // Give up quietly: the webhook may simply be slow, and the order is
+        // safe either way — the customer just sees the pending state.
+        if (Date.now() - startedAt >= POLL_TIMEOUT_MS) return;
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       }
-      setLoading(false);
     }
 
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [orderNumber, sessionId]);
 
   if (loading) {
