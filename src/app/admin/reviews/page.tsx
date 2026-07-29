@@ -32,6 +32,8 @@ export default function AdminReviews() {
   const [filterRating, setFilterRating] = useState(0);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkRunning, setBulkRunning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadReviews() {
@@ -267,6 +269,67 @@ export default function AdminReviews() {
 
   const pendingCount = reviews.filter((r) => !r.approved).length;
 
+  const filteredIds = filtered.map((r) => r.id);
+  const selectedCount = selected.size;
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** Select-all applies to the current filter, not the whole table. */
+  function toggleAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) filteredIds.forEach((id) => next.delete(id));
+      else filteredIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  async function runBulk(action: "approve" | "hide" | "verify" | "unverify" | "delete") {
+    const ids = filteredIds.filter((id) => selected.has(id));
+    if (!ids.length) return;
+
+    if (action === "delete" && !confirm(`Delete ${ids.length} review(s) permanently? This cannot be undone.`)) {
+      return;
+    }
+
+    setBulkRunning(true);
+    try {
+      // The API caps each request, so large selections go in chunks.
+      const CHUNK = 500;
+      let affected = 0;
+
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const res = await fetch("/api/reviews/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: ids.slice(i, i + CHUNK), action }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(data.error || `Bulk ${action} failed`);
+          break;
+        }
+        affected += data.affected || 0;
+      }
+
+      setSelected(new Set());
+      await loadReviews();
+      if (affected) alert(`${affected} review(s) updated.`);
+    } catch {
+      alert("Bulk action failed");
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -405,14 +468,69 @@ export default function AdminReviews() {
         <div className="text-center py-12 text-gray-400">No reviews found.</div>
       ) : (
         <div className="space-y-4">
+          {/* Selection toolbar */}
+          <div className="flex items-center gap-3 flex-wrap bg-white border rounded-xl px-4 py-3 sticky top-0 z-10">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleAllFiltered}
+                className="w-4 h-4 accent-olive cursor-pointer"
+              />
+              <span className="text-sm text-gray-700">
+                Select all {filtered.length !== reviews.length ? `${filtered.length} shown` : filtered.length}
+              </span>
+            </label>
+
+            {selectedCount > 0 && (
+              <>
+                <span className="text-sm font-medium text-olive">{selectedCount} selected</span>
+                <div className="flex items-center gap-2 flex-wrap ml-auto">
+                  <button onClick={() => runBulk("approve")} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50">
+                    Approve
+                  </button>
+                  <button onClick={() => runBulk("hide")} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-yellow-100 text-yellow-700 hover:bg-yellow-200 disabled:opacity-50">
+                    Hide
+                  </button>
+                  <button onClick={() => runBulk("verify")} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">
+                    Verify
+                  </button>
+                  <button onClick={() => runBulk("unverify")} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">
+                    Unverify
+                  </button>
+                  <button onClick={() => runBulk("delete")} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50">
+                    Delete
+                  </button>
+                  <button onClick={() => setSelected(new Set())} disabled={bulkRunning}
+                    className="px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50">
+                    Clear
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           {filtered.map((review) => (
             <div
               key={review.id}
               className={`bg-white rounded-xl border p-5 ${
-                review.approved ? "border-green-200" : "border-yellow-200"
+                selected.has(review.id)
+                  ? "border-olive ring-1 ring-olive/30"
+                  : review.approved ? "border-green-200" : "border-yellow-200"
               }`}
             >
               <div className="flex items-start justify-between gap-4">
+                <input
+                  type="checkbox"
+                  checked={selected.has(review.id)}
+                  onChange={() => toggleOne(review.id)}
+                  className="w-4 h-4 mt-1 accent-olive cursor-pointer flex-shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   {/* Header */}
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
