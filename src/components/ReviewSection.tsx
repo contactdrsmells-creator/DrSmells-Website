@@ -227,10 +227,7 @@ function WriteReviewForm({
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Check className="w-8 h-8 text-green-600" />
         </div>
-        <h3 className="text-lg font-semibold text-olive mb-2">Thank you for your review!</h3>
-        <p className="text-olive/60 text-sm">
-          Your review has been submitted and will appear once approved.
-        </p>
+        <h3 className="text-lg font-semibold text-olive">Thank you for your review!</h3>
       </div>
     );
   }
@@ -585,19 +582,32 @@ export default function ReviewSection({ productId, productName }: ReviewSectionP
                 >
                   ← Prev
                 </button>
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPage(i + 1)}
-                    className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
-                      page === i + 1
-                        ? "bg-olive text-white"
-                        : "text-olive/60 hover:bg-olive/10"
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {/* A sliding window of at most 5 numbers around the current
+                    page. Rendering every page put 71 numbers across the screen
+                    once the review count grew. Prev/Next reach the rest. */}
+                {(() => {
+                  const WINDOW = 5;
+                  let start = Math.max(1, page - Math.floor(WINDOW / 2));
+                  const end = Math.min(totalPages, start + WINDOW - 1);
+                  start = Math.max(1, end - WINDOW + 1);
+
+                  return Array.from({ length: end - start + 1 }).map((_, i) => {
+                    const pageNum = start + i;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                          page === pageNum
+                            ? "bg-olive text-white"
+                            : "text-olive/60 hover:bg-olive/10"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  });
+                })()}
                 <button
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
                   disabled={page === totalPages}
