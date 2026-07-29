@@ -1,11 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
+
+interface SiteSettings {
+  contact?: { email?: string; phone?: string; whatsapp?: string; address?: string };
+  social?: { facebook?: string; instagram?: string; tiktok?: string; whatsapp?: string };
+}
+
+/** Brand icons — lucide-react no longer ships these. */
+const SOCIAL_ICONS: Record<string, React.ReactNode> = {
+  facebook: (
+    <path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z" />
+  ),
+  instagram: (
+    <path d="M12 2.2c3.2 0 3.6 0 4.9.1 1.2.1 1.8.2 2.2.4.6.2 1 .5 1.4.9.4.4.7.8.9 1.4.2.4.4 1 .4 2.2.1 1.3.1 1.7.1 4.9s0 3.6-.1 4.9c-.1 1.2-.2 1.8-.4 2.2-.2.6-.5 1-.9 1.4-.4.4-.8.7-1.4.9-.4.2-1 .4-2.2.4-1.3.1-1.7.1-4.9.1s-3.6 0-4.9-.1c-1.2-.1-1.8-.2-2.2-.4-.6-.2-1-.5-1.4-.9-.4-.4-.7-.8-.9-1.4-.2-.4-.4-1-.4-2.2-.1-1.3-.1-1.7-.1-4.9s0-3.6.1-4.9c.1-1.2.2-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.2 1-.4 2.2-.4 1.3-.1 1.7-.1 4.9-.1Zm0 3.4A6.4 6.4 0 1 0 18.4 12 6.4 6.4 0 0 0 12 5.6Zm0 10.5A4.1 4.1 0 1 1 16.1 12 4.1 4.1 0 0 1 12 16.1Zm6.7-10.7a1.5 1.5 0 1 0 1.5 1.5 1.5 1.5 0 0 0-1.5-1.5Z" />
+  ),
+  tiktok: (
+    <path d="M16.6 5.8a4.8 4.8 0 0 1-1-2.8h-3v11.7a2.5 2.5 0 1 1-1.8-2.4V9.2a5.5 5.5 0 1 0 4.8 5.5V9.4a7.9 7.9 0 0 0 4.6 1.5V7.9a4.7 4.7 0 0 1-3.6-2.1Z" />
+  ),
+};
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [settings, setSettings] = useState<SiteSettings>({});
+
+  // Pulled from Site Settings rather than hardcoded, so the details here can be
+  // updated from admin without a deploy — and can't drift out of sync with the
+  // footer the way the old placeholder values had.
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((data) => setSettings(data || {}))
+      .catch(() => {});
+  }, []);
+
+  const contact = settings.contact || {};
+  const social = settings.social || {};
+
+  // Prefer the ready-made link from settings; otherwise build one from the number.
+  const whatsappNumber = (contact.whatsapp || contact.phone || "").replace(/\D/g, "");
+  const whatsappLink = social.whatsapp || (whatsappNumber ? `https://wa.me/${whatsappNumber}` : "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +68,13 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-olive">Email</p>
-                  <p className="text-olive/60 text-sm">info@drsmells.com.my</p>
+                  {contact.email ? (
+                    <a href={`mailto:${contact.email}`} className="text-olive/60 text-sm hover:text-olive transition-colors break-all">
+                      {contact.email}
+                    </a>
+                  ) : (
+                    <p className="text-olive/60 text-sm">&mdash;</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-start gap-4">
@@ -41,9 +83,18 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-olive">WhatsApp</p>
-                  <p className="text-olive/60 text-sm">
-                    Contact us via WhatsApp for quick support
-                  </p>
+                  {whatsappLink ? (
+                    <a
+                      href={whatsappLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-olive/60 text-sm hover:text-olive transition-colors"
+                    >
+                      {contact.whatsapp || contact.phone}
+                    </a>
+                  ) : (
+                    <p className="text-olive/60 text-sm">&mdash;</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-start gap-4">
@@ -52,10 +103,35 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-olive">Location</p>
-                  <p className="text-olive/60 text-sm">Malaysia</p>
+                  <p className="text-olive/60 text-sm">{contact.address || "Malaysia"}</p>
                 </div>
               </div>
             </div>
+
+            {/* Social links — only those actually set in Site Settings */}
+            {(social.facebook || social.instagram || social.tiktok) && (
+              <div className="mt-8">
+                <p className="font-semibold text-olive mb-3">Follow Us</p>
+                <div className="flex items-center gap-3">
+                  {(["facebook", "instagram", "tiktok"] as const).map((key) =>
+                    social[key] ? (
+                      <a
+                        key={key}
+                        href={social[key]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={key}
+                        className="w-10 h-10 bg-olive/10 rounded-xl flex items-center justify-center text-olive hover:bg-olive hover:text-cream transition-colors"
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                          {SOCIAL_ICONS[key]}
+                        </svg>
+                      </a>
+                    ) : null,
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mt-10 p-6 bg-sage-light rounded-2xl">
               <h3 className="font-semibold text-olive mb-2">

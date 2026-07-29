@@ -74,9 +74,10 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-olive mb-3">Help</h4>
             <ul className="space-y-2 text-sm text-olive/60">
+              {/* Customer Support removed — it pointed at /contact, which is
+                  already linked as "Contact Us" under About. Admin Login
+                  removed: no reason to advertise the admin panel to shoppers. */}
               <li><Link href="/faq" className="hover:text-olive transition-colors">Shipping & Returns</Link></li>
-              <li><Link href="/contact" className="hover:text-olive transition-colors">Customer Support</Link></li>
-              <li><Link href="/admin" className="hover:text-olive transition-colors">Admin Login</Link></li>
             </ul>
           </div>
         </div>
