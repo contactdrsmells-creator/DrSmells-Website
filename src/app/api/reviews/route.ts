@@ -8,6 +8,33 @@ function getSupabase() {
   );
 }
 
+/**
+ * Supabase/PostgREST returns at most 1000 rows per request, so a plain select
+ * silently truncates once the table passes that — the admin list froze at
+ * "1000" while more reviews existed. Pages through with .range() instead.
+ *
+ * Capped so a runaway table can't be pulled into memory in one go.
+ */
+const PAGE_SIZE = 1000;
+const MAX_ROWS = 20000;
+
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const rows: T[] = [];
+
+  for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
+    if (error) return { rows, error: error.message };
+    if (!data?.length) break;
+
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break; // last page
+  }
+
+  return { rows, error: null };
+}
+
 // GET — public: fetch approved reviews for a product
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -24,13 +51,16 @@ export async function GET(request: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await db
-      .from("reviews")
-      .select("*, products:product_id(name, slug)")
-      .order("created_at", { ascending: false });
+    const { rows, error } = await fetchAllRows((from, to) =>
+      db
+        .from("reviews")
+        .select("*, products:product_id(name, slug)")
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    );
 
-    if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json(data);
+    if (error) return Response.json({ error }, { status: 500 });
+    return Response.json(rows);
   }
 
   // Public: approved reviews for a product
@@ -38,15 +68,19 @@ export async function GET(request: Request) {
     return Response.json({ error: "product_id required" }, { status: 400 });
   }
 
-  const { data, error } = await db
-    .from("reviews")
-    .select("*")
-    .eq("product_id", productId)
-    .eq("approved", true)
-    .order("created_at", { ascending: false });
+  // Same cap applies per product once a product passes 1000 approved reviews.
+  const { rows, error } = await fetchAllRows((from, to) =>
+    db
+      .from("reviews")
+      .select("*")
+      .eq("product_id", productId)
+      .eq("approved", true)
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
 
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json(data);
+  if (error) return Response.json({ error }, { status: 500 });
+  return Response.json(rows);
 }
 
 // POST — public: submit a new review
