@@ -7,6 +7,7 @@ import { ShippingAddress } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 import { resolveUnitPrice } from "@/lib/pricing";
+import { trackInitiateCheckout } from "@/components/MetaPixel";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -65,6 +66,15 @@ export default function CheckoutPage() {
     postcode: "",
     country: "Malaysia",
   });
+
+  // Reaching checkout is the strongest pre-purchase signal Meta can optimise
+  // toward. Fires once on mount, with the cart value at that moment.
+  useEffect(() => {
+    if (items.length > 0) {
+      trackInitiateCheckout(totalPrice, items.reduce((sum, i) => sum + i.quantity, 0));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     Promise.all([

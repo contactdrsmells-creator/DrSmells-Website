@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ImageProtection from "@/components/ImageProtection";
+import MetaPixel from "@/components/MetaPixel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
+        <MetaPixel />
         <ImageProtection />
         <Navbar />
         <main className="flex-1">{children}</main>

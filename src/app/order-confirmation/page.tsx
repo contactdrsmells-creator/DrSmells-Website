@@ -5,6 +5,7 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Order } from "@/lib/types";
+import { trackPurchase } from "@/components/MetaPixel";
 
 function OrderConfirmationContent() {
   const searchParams = useSearchParams();
@@ -32,7 +33,16 @@ function OrderConfirmationContent() {
 
       const res = await fetch(`/api/orders?order_number=${orderNumber}`);
       const data = await res.json();
-      if (data.order) setOrder(data.order);
+      if (data.order) {
+        setOrder(data.order);
+
+        // Report the sale to Meta only once payment is actually confirmed —
+        // firing on page load alone would count abandoned and failed payments
+        // as revenue.
+        if (data.order.payment_status === "paid") {
+          trackPurchase(data.order.order_number, data.order.total, data.order.items || []);
+        }
+      }
       setLoading(false);
     }
 
