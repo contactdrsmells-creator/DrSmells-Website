@@ -108,7 +108,14 @@
       "Bash(find ~/Downloads ~/Desktop -maxdepth 1 \\\\\\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" -o -iname \"*.svg\" \\\\\\) -newermt \"-3 days\" 2>/dev/null | head -15)",
       "Bash(python3 -c \"import PIL; print\\('PIL', PIL.__version__\\)\")",
       "Bash(node -e \"require\\('sharp'\\)\")",
-      "Bash(mv icon-round.png icon.png)"
+      "Bash(mv icon-round.png icon.png)",
+      "Bash(node --check pages/api/orders/\\\\[id\\\\].js)",
+      "Bash(npx --yes esbuild pages/dashboard/orders.js --loader=jsx --outfile=/dev/null)",
+      "Bash(npx --yes esbuild pages/dashboard/orders.js --loader:.js=jsx --bundle=false --outfile=/dev/null)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(npx --yes esbuild pages/dashboard/orders.js --loader:.js=jsx --outfile=/dev/null)",
+      "mcp__5c5768c8-2a69-4b5d-9a5b-1e71c8a80cd5__list_whatsapp_accounts",
+      "mcp__5c5768c8-2a69-4b5d-9a5b-1e71c8a80cd5__list_whatsapp_templates"
     ]
   }
 }

@@ -30,6 +30,7 @@ const navItems = [
   { href: "/admin/payment", icon: CreditCard, label: "Payment" },
   { href: "/admin/shipping", icon: Truck, label: "Shipping" },
   { href: "/admin/vouchers", icon: Ticket, label: "Vouchers" },
+  { href: "/admin/automation", icon: MessageCircle, label: "WhatsApp" },
   { href: "/admin/settings", icon: Settings, label: "Site Settings" },
 ];
 

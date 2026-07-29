@@ -425,13 +425,15 @@ export async function POST(request: Request) {
       }
 
       const dokuData = await dokuRes.json();
+      redirect_url = dokuData.payment?.checkout_url || "";
 
+      // Store the checkout link so an unpaid-order reminder can send the customer
+      // straight back to it. DOKU expires these after 24h, which is why the
+      // reminder delay is measured in hours.
       await supabase
         .from("orders")
-        .update({ payment_reference: checkoutId })
+        .update({ payment_reference: checkoutId, payment_url: redirect_url || null })
         .eq("id", order.id);
-
-      redirect_url = dokuData.payment?.checkout_url || "";
     }
 
     return Response.json({

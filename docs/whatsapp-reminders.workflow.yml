@@ -1,0 +1,32 @@
+name: WhatsApp unpaid-order reminders
+
+# Vercel's Hobby plan only fires cron once a day, which is far too coarse for a
+# "3 hours after the order" rule — so the schedule lives here instead. The
+# endpoint itself decides which orders are actually due, so running hourly is
+# safe and simply does nothing when there is nothing to send.
+on:
+  schedule:
+    - cron: "0 * * * *" # hourly, on the hour (UTC)
+  workflow_dispatch: {} # allows a manual run from the Actions tab
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder job
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "https://drsmells-website.vercel.app/api/cron/whatsapp-reminders")
+
+          body=$(echo "$response" | sed '$d')
+          code=$(echo "$response" | tail -n1)
+
+          echo "HTTP $code"
+          echo "$body"
+
+          # Fail the run on a non-2xx so a broken secret or outage is visible in
+          # the Actions tab rather than silently sending nothing for weeks.
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            exit 1
+          fi
