@@ -115,7 +115,9 @@
       "Bash(echo \"exit=$?\")",
       "Bash(npx --yes esbuild pages/dashboard/orders.js --loader:.js=jsx --outfile=/dev/null)",
       "mcp__5c5768c8-2a69-4b5d-9a5b-1e71c8a80cd5__list_whatsapp_accounts",
-      "mcp__5c5768c8-2a69-4b5d-9a5b-1e71c8a80cd5__list_whatsapp_templates"
+      "mcp__5c5768c8-2a69-4b5d-9a5b-1e71c8a80cd5__list_whatsapp_templates",
+      "Bash(git mv *)",
+      "Bash(perl -0pi -e 's/      created_at: r\\\\.created_at,\\\\n/      created_at: toDateOnly\\(r.created_at\\),\\\\n/g' src/app/admin/reviews/page.tsx)"
     ]
   }
 }

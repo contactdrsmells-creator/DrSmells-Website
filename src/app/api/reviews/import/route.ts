@@ -8,6 +8,27 @@ function getSupabase() {
   );
 }
 
+/**
+ * Accepts the plain YYYY-MM-DD the export produces, and still tolerates a full
+ * timestamp from older files. Anything unparseable returns null so the row is
+ * inserted with the current time rather than a bad date — a spreadsheet that
+ * silently reformats a column shouldn't corrupt review history.
+ */
+function parseImportDate(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  // Date-only: pin to midday UTC so the calendar date can't shift a day either
+  // way once rendered in Malaysia's timezone.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T12:00:00Z`);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  const parsed = new Date(raw);
+  return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 export async function POST(request: Request) {
   // Auth check
   const cookieStore = await cookies();
@@ -60,7 +81,7 @@ export async function POST(request: Request) {
       images,
       verified: r.verified === true || r.verified === "true",
       approved: r.approved === true || r.approved === "true",
-      ...(r.created_at ? { created_at: r.created_at } : {}),
+      ...(parseImportDate(r.created_at) ? { created_at: parseImportDate(r.created_at) } : {}),
     });
   }
 

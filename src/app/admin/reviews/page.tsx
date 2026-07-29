@@ -86,6 +86,13 @@ export default function AdminReviews() {
   }
 
   // Export reviews as CSV
+  /**
+   * Exports dates as plain YYYY-MM-DD so a file can be edited in Excel and
+   * re-imported unchanged. Full timestamps round-trip badly — spreadsheets
+   * reformat them on open.
+   */
+  const toDateOnly = (value: string) => (value ? String(value).slice(0, 10) : "");
+
   function exportCSV() {
     const rows = filtered.map((r) => ({
       name: r.name,
@@ -98,7 +105,7 @@ export default function AdminReviews() {
       verified: r.verified,
       approved: r.approved,
       images: (r.images || []).join(";"),
-      created_at: r.created_at,
+      created_at: toDateOnly(r.created_at),
     }));
 
     const headers = Object.keys(rows[0] || {});
@@ -139,7 +146,7 @@ export default function AdminReviews() {
       verified: r.verified,
       approved: r.approved,
       images: r.images || [],
-      created_at: r.created_at,
+      created_at: toDateOnly(r.created_at),
     }));
 
     const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -462,13 +469,9 @@ export default function AdminReviews() {
 
                   {/* Date */}
                   <p className="text-xs text-gray-400">
-                    {new Date(review.created_at).toLocaleDateString("en-MY", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {/* Same YYYY-MM-DD the export uses, so what you see here
+                        matches the file you edit and re-import. */}
+                    {toDateOnly(review.created_at)}
                   </p>
                 </div>
 
