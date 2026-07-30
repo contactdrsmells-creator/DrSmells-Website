@@ -36,17 +36,23 @@ export async function PUT(request: Request) {
     const existing = await loadAutomationConfig();
 
     const delay = Number(body.delay_hours);
-    const maxAge = Number(body.max_age_hours);
 
     if (!Number.isFinite(delay) || delay < 0 || delay > 720) {
       return Response.json({ error: "Delay must be between 0 and 720 hours" }, { status: 400 });
     }
-    if (!Number.isFinite(maxAge) || maxAge <= delay) {
-      return Response.json({ error: "Max age must be greater than the delay" }, { status: 400 });
-    }
     if (body.enabled && !String(body.webhook_url || "").startsWith("https://")) {
       return Response.json({ error: "Webhook URL must be https" }, { status: 400 });
     }
+
+    const enabling = body.enabled === true;
+    // Stamp the moment it is switched on, so only orders placed from now on are
+    // ever eligible. Re-saving while already enabled keeps the original stamp —
+    // otherwise every settings tweak would silently skip orders in flight.
+    const activatedAt = enabling
+      ? existing.enabled && existing.activated_at
+        ? existing.activated_at
+        : new Date().toISOString()
+      : null;
 
     const value = {
       enabled: body.enabled === true,
@@ -58,7 +64,7 @@ export async function PUT(request: Request) {
           : String(body.flowbuilder_key).trim(),
       trigger_status: String(body.trigger_status || "pending").trim(),
       delay_hours: delay,
-      max_age_hours: maxAge,
+      activated_at: activatedAt,
       phone_field: String(body.phone_field || "phone").trim(),
     };
 

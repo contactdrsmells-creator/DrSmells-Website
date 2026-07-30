@@ -123,7 +123,10 @@
       "Bash(curl -s https://drsmells.com.my)",
       "Bash(grep -o \"facebook[^\\\\\"']\\\\{0,40\\\\}\")",
       "Bash(curl -s https://drsmells-website.vercel.app)",
-      "Bash(curl -s -H 'Cache-Control: no-cache' https://drsmells.com.my/?cachebust=__TRACKED_VAR__)"
+      "Bash(curl -s -H 'Cache-Control: no-cache' https://drsmells.com.my/?cachebust=__TRACKED_VAR__)",
+      "Bash(node --check pages/api/auth/login.js)",
+      "Bash(npx --yes esbuild pages/index.js --loader:.js=jsx --outfile=/dev/null)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const a=JSON.parse\\(d\\);console.log\\(Array.isArray\\(a\\)?a.map\\(f=>'  '+f.name\\).join\\('\\\\n'\\):'  none'\\)}catch{console.log\\('  no .github/workflows directory in repo'\\)}}\\)\")"
     ]
   }
 }

@@ -10,7 +10,7 @@ interface AutomationConfig {
   flowbuilder_key_set?: boolean;
   trigger_status: string;
   delay_hours: number;
-  max_age_hours: number;
+  activated_at: string | null;
   phone_field: string;
 }
 
@@ -131,7 +131,7 @@ export default function AdminAutomationPage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Order status</label>
               <select
@@ -155,21 +155,18 @@ export default function AdminAutomationPage() {
                 className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-olive/30"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stop after (hours)</label>
-              <input
-                type="number"
-                min={1}
-                value={config.max_age_hours}
-                onChange={(e) => set("max_age_hours", parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-olive/30"
-              />
-            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            Orders older than the &quot;stop after&quot; window are never messaged — useful so
-            switching this on doesn&apos;t chase a backlog of old orders.
-          </p>
+
+          <div className="mt-4 text-xs text-gray-500 space-y-1">
+            <p>Only orders placed <strong>after you switch this on</strong> are messaged — existing orders are never chased.</p>
+            <p>A customer gets <strong>one message</strong> even if they have several unpaid orders from retrying checkout.</p>
+            <p>Anyone who <strong>paid within the last 24 hours</strong> is skipped, so a completed purchase isn&apos;t followed by a payment reminder.</p>
+            {config.enabled && config.activated_at && (
+              <p className="text-olive pt-1">
+                Active since {new Date(config.activated_at).toLocaleString("en-MY")}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border p-6">

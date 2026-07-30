@@ -16,8 +16,11 @@ export interface WhatsAppAutomationConfig {
   trigger_status: string;
   /** Wait this long after the order is created before messaging. */
   delay_hours: number;
-  /** Never chase orders older than this — stale reminders annoy more than convert. */
-  max_age_hours: number;
+  /**
+   * When the automation was switched on. Only orders created after this are
+   * ever eligible, so enabling it never chases the existing backlog.
+   */
+  activated_at: string | null;
   /** POST field name Strive expects for the recipient number. */
   phone_field: string;
 }
@@ -28,9 +31,15 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
   flowbuilder_key: "",
   trigger_status: "pending",
   delay_hours: 3,
-  max_age_hours: 48,
+  activated_at: null,
   phone_field: "phone",
 };
+
+/**
+ * A customer who paid this recently is not chased about a leftover unpaid
+ * order — duplicates are usually failed retries of the purchase they completed.
+ */
+export const RECENT_PAYMENT_WINDOW_HOURS = 24;
 
 export const SETTINGS_KEY = "whatsapp_automation";
 
