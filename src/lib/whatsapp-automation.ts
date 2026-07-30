@@ -36,10 +36,12 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
 };
 
 /**
- * A customer who paid this recently is not chased about a leftover unpaid
- * order — duplicates are usually failed retries of the purchase they completed.
+ * Grace period applied when deciding whether a payment "belongs to" an unpaid
+ * order. A customer who pays slightly before starting the abandoned order (for
+ * example finishing one checkout then opening another) still counts as having
+ * bought, so a small window back from the unpaid order is treated as paid.
  */
-export const RECENT_PAYMENT_WINDOW_HOURS = 24;
+export const PAYMENT_GRACE_MINUTES = 30;
 
 export const SETTINGS_KEY = "whatsapp_automation";
 

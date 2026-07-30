@@ -160,7 +160,7 @@ export default function AdminAutomationPage() {
           <div className="mt-4 text-xs text-gray-500 space-y-1">
             <p>Only orders placed <strong>after you switch this on</strong> are messaged — existing orders are never chased.</p>
             <p>A customer gets <strong>one message</strong> even if they have several unpaid orders from retrying checkout.</p>
-            <p>Anyone who <strong>paid within the last 24 hours</strong> is skipped, so a completed purchase isn&apos;t followed by a payment reminder.</p>
+            <p>A customer who <strong>went on to pay</strong> is skipped — failed attempts before a successful order never trigger a reminder.</p>
             {config.enabled && config.activated_at && (
               <p className="text-olive pt-1">
                 Active since {new Date(config.activated_at).toLocaleString("en-MY")}

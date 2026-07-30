@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "crypto";
 import {
-  RECENT_PAYMENT_WINDOW_HOURS,
+  PAYMENT_GRACE_MINUTES,
   getSupabase,
   loadAutomationConfig,
   normalisePhone,
@@ -18,8 +18,10 @@ import {
  *  - only orders placed after the automation was switched on
  *  - one message per customer, not per order (people retry checkout, leaving
  *    several identical pending orders behind)
- *  - nobody who paid in the last 24h, since their leftover pending orders are
- *    almost always failed attempts at the purchase they completed
+ *  - nobody who went on to pay. Customers usually fail a few times and succeed
+ *    last, so the completed order is created *after* the abandoned ones; a
+ *    payment from the same number at or after the unpaid order means they got
+ *    there in the end.
  */
 
 interface OrderRow {
@@ -65,7 +67,6 @@ export async function GET(request: Request) {
   const supabase = getSupabase();
   const now = Date.now();
   const readyBefore = new Date(now - config.delay_hours * 3600_000).toISOString();
-  const paidSince = new Date(now - RECENT_PAYMENT_WINDOW_HOURS * 3600_000).toISOString();
 
   const { data: orders, error } = await supabase
     .from("orders")
@@ -82,19 +83,30 @@ export async function GET(request: Request) {
 
   const candidates = (orders || []) as OrderRow[];
 
-  // Phones that completed a payment recently — checked once rather than per order.
-  const { data: recentPaid } = await supabase
+  // Latest successful payment per phone. Only needs to reach back as far as the
+  // oldest order under consideration — a payment older than that belongs to an
+  // earlier, unrelated purchase and shouldn't suppress this one.
+  const oldestCandidate = candidates.length
+    ? candidates[candidates.length - 1].created_at
+    : new Date(now).toISOString();
+  const lookbackFrom = new Date(
+    new Date(oldestCandidate).getTime() - PAYMENT_GRACE_MINUTES * 60_000,
+  ).toISOString();
+
+  const { data: paidOrders } = await supabase
     .from("orders")
-    .select("shipping")
+    .select("shipping, created_at")
     .eq("payment_status", "paid")
-    .gte("created_at", paidSince)
+    .gte("created_at", lookbackFrom)
     .limit(500);
 
-  const paidPhones = new Set(
-    (recentPaid || [])
-      .map((o) => normalisePhone((o.shipping as { phone?: string } | null)?.phone))
-      .filter(Boolean) as string[],
-  );
+  const lastPaidAt = new Map<string, number>();
+  for (const paid of paidOrders || []) {
+    const phone = normalisePhone((paid.shipping as { phone?: string } | null)?.phone);
+    if (!phone) continue;
+    const at = new Date(paid.created_at as string).getTime();
+    if (at > (lastPaidAt.get(phone) ?? 0)) lastPaidAt.set(phone, at);
+  }
 
   // Group by customer. Retrying checkout leaves several identical pending
   // orders; the customer should hear from us once.
@@ -117,14 +129,18 @@ export async function GET(request: Request) {
   for (const [phone, group] of byPhone) {
     const ids = group.map((o) => o.id);
 
-    if (paidPhones.has(phone)) {
-      // They already bought. Suppress the leftovers permanently rather than
-      // re-checking them every hour.
+    // Did they pay at or after starting the earliest of these unpaid orders?
+    // If so the unpaid ones are failed attempts at a purchase they completed.
+    const earliestAttempt = Math.min(...group.map((o) => new Date(o.created_at).getTime()));
+    const paidAt = lastPaidAt.get(phone);
+
+    if (paidAt !== undefined && paidAt >= earliestAttempt - PAYMENT_GRACE_MINUTES * 60_000) {
+      // Suppress permanently rather than re-checking them every hour.
       await supabase.from("orders").update({ reminder_sent_at: stamp() }).in("id", ids);
       results.push({
         order: group.map((o) => o.order_number).join(", "),
         status: "skipped",
-        reason: "customer paid within 24h",
+        reason: "customer completed payment",
       });
       continue;
     }
