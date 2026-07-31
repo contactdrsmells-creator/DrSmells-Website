@@ -51,6 +51,10 @@ export async function syncOrderToCRM(orderNumber: string) {
     postcode: shipping.postcode || "",
     country: "Malaysia",
     payment: order.payment_method || "Bank",
+    // Where the customer came from (Meta, Ig, Direct…). Shown in the CRM's
+    // "Sales by" column, which is otherwise empty for website orders since no
+    // staff member handled them.
+    source: order.source || "Direct",
     notes: `Website Order #${orderNumber} | Payment: ${order.payment_method} | Ref: ${order.payment_reference || "N/A"}`,
     order_items: items.map((i: { product_name: string; variation?: string; quantity: number }) => ({
       product: i.variation ? `${i.product_name} (${i.variation})` : i.product_name,

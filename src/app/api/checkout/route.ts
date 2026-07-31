@@ -259,7 +259,7 @@ export async function POST(request: Request) {
 
         await supabase
           .from("orders")
-          .update({ payment_reference: session.id })
+          .update({ payment_reference: session.id, payment_url: session.url || null })
           .eq("id", order.id);
 
         redirect_url = session.url || "";
@@ -313,7 +313,7 @@ export async function POST(request: Request) {
 
         await supabase
           .from("orders")
-          .update({ payment_reference: session.id })
+          .update({ payment_reference: session.id, payment_url: session.url || null })
           .eq("id", order.id);
 
         redirect_url = session.url || "";
