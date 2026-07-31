@@ -376,7 +376,7 @@ export default function CheckoutPage() {
                           className="accent-olive"
                         />
                         <div>
-                          <p className="font-medium text-olive">DOKU</p>
+                          <p className="font-medium text-olive">DOKU (recommended)</p>
                           <p className="text-xs text-olive/50">FPX, E-Wallet, BNPL, Credit/Debit Card (Malaysia)</p>
                         </div>
                       </label>
@@ -392,7 +392,7 @@ export default function CheckoutPage() {
                           className="accent-olive"
                         />
                         <div>
-                          <p className="font-medium text-olive">Credit / Debit Card</p>
+                          <p className="font-medium text-olive">Stripe</p>
                           <p className="text-xs text-olive/50">Visa, Mastercard — secured by Stripe</p>
                         </div>
                       </label>
