@@ -52,7 +52,7 @@ export const PAYMENT_GRACE_MINUTES = 30;
  * run picks them up.
  */
 export const QUIET_HOURS_START = 0; // 00:00 — no sending from here...
-export const QUIET_HOURS_END = 8; // ...until 08:00
+export const QUIET_HOURS_END = 6; // ...until 06:00
 export const BUSINESS_TIMEZONE = "Asia/Kuala_Lumpur";
 
 /** Current hour (0–23) in the business's timezone, independent of server time. */

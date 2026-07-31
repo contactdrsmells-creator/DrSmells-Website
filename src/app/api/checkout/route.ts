@@ -55,8 +55,9 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
 
     // Store the number in international form so WhatsApp, Strive and the CRM
-    // all receive a consistent value.
-    shipping.phone = normalisePhoneForStorage(shipping.phone);
+    // all receive a consistent value. Only applied to Malaysian orders — a
+    // leading 0 means something different in every other country.
+    shipping.phone = normalisePhoneForStorage(shipping.phone, shipping.country);
 
     // Server-side price verification
     let verifiedTotal = 0;

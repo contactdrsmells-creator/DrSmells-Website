@@ -161,7 +161,7 @@ export default function AdminAutomationPage() {
             <p>Only orders placed <strong>after you switch this on</strong> are messaged — existing orders are never chased.</p>
             <p>A customer gets <strong>one message</strong> even if they have several unpaid orders from retrying checkout.</p>
             <p>A customer who <strong>went on to pay</strong> is skipped — failed attempts before a successful order never trigger a reminder.</p>
-            <p>Messages only send between <strong>8:00am and 11:59pm</strong> Malaysia time. Anything due overnight is held until 8am, not skipped.</p>
+            <p>Messages only send between <strong>6:00am and 11:59pm</strong> Malaysia time. Anything due overnight is held until 6am, not skipped.</p>
             {config.enabled && config.activated_at && (
               <p className="text-olive pt-1">
                 Active since {new Date(config.activated_at).toLocaleString("en-MY")}
