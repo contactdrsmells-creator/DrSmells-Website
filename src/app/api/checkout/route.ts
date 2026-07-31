@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, createHash } from "crypto";
 import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
+import { normalisePhoneForStorage } from "@/lib/phone";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -52,6 +53,10 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabase();
+
+    // Store the number in international form so WhatsApp, Strive and the CRM
+    // all receive a consistent value.
+    shipping.phone = normalisePhoneForStorage(shipping.phone);
 
     // Server-side price verification
     let verifiedTotal = 0;

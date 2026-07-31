@@ -43,6 +43,34 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
  */
 export const PAYMENT_GRACE_MINUTES = 30;
 
+/**
+ * Messages only go out between these hours, Malaysia time. A checkout at 9pm
+ * would otherwise reach the customer at midnight.
+ *
+ * Anything that falls due overnight is held rather than dropped: the job simply
+ * doesn't send during quiet hours, leaving those orders unclaimed so the 8am
+ * run picks them up.
+ */
+export const QUIET_HOURS_START = 0; // 00:00 — no sending from here...
+export const QUIET_HOURS_END = 8; // ...until 08:00
+export const BUSINESS_TIMEZONE = "Asia/Kuala_Lumpur";
+
+/** Current hour (0–23) in the business's timezone, independent of server time. */
+export function currentHourInBusinessTimezone(now: Date = new Date()): number {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: "2-digit",
+    hour12: false,
+  }).format(now);
+  return parseInt(formatted, 10);
+}
+
+/** True when messages should be held until the morning. */
+export function isQuietHours(now: Date = new Date()): boolean {
+  const hour = currentHourInBusinessTimezone(now);
+  return hour >= QUIET_HOURS_START && hour < QUIET_HOURS_END;
+}
+
 export const SETTINGS_KEY = "whatsapp_automation";
 
 export function getSupabase() {

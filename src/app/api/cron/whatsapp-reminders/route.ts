@@ -1,7 +1,10 @@
 import { createHash, timingSafeEqual } from "crypto";
 import {
   PAYMENT_GRACE_MINUTES,
+  QUIET_HOURS_END,
+  currentHourInBusinessTimezone,
   getSupabase,
+  isQuietHours,
   loadAutomationConfig,
   normalisePhone,
   sendToStrive,
@@ -62,6 +65,18 @@ export async function GET(request: Request) {
   }
   if (!config.activated_at) {
     return Response.json({ skipped: "no activation timestamp", sent: 0 });
+  }
+
+  // Return before touching any order: nothing is claimed or marked, so orders
+  // that came due overnight are still waiting for the 08:00 run rather than
+  // being silently consumed.
+  if (isQuietHours()) {
+    return Response.json({
+      skipped: "quiet hours",
+      local_hour: currentHourInBusinessTimezone(),
+      resumes_at: `${String(QUIET_HOURS_END).padStart(2, "0")}:00 Malaysia time`,
+      sent: 0,
+    });
   }
 
   const supabase = getSupabase();
