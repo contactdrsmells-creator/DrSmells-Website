@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { syncOrderToCRM } from "@/lib/crm-sync";
+import { markOrderPaid } from "@/lib/mark-order-paid";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -37,20 +38,18 @@ export async function POST(request: Request) {
         .single();
 
       if (order && order.status !== "paid") {
-        const updateData: Record<string, string> = {
-          status: "paid",
-          payment_status: "paid",
-          payment_reference: (session.payment_intent as string) || session.id,
-          updated_at: new Date().toISOString(),
-        };
-        if (session.subscription) {
-          updateData.stripe_subscription_id = session.subscription as string;
-        }
-
-        await supabase
-          .from("orders")
-          .update(updateData)
-          .eq("order_number", order_number);
+        await markOrderPaid(
+          supabase,
+          order_number,
+          {
+            status: "paid",
+            payment_status: "paid",
+            payment_reference: (session.payment_intent as string) || session.id,
+            updated_at: new Date().toISOString(),
+          },
+          // Written separately so a missing column can't block the status.
+          session.subscription ? { stripe_subscription_id: session.subscription as string } : {},
+        );
 
         await syncOrderToCRM(order_number).catch((err) =>
           console.error("[CRM Sync] Error in Stripe verify:", err)
