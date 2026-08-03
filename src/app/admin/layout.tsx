@@ -19,19 +19,28 @@ import {
   MessageCircle,
   Truck,
   Ticket,
+  Shield,
 } from "lucide-react";
+import { AdminRole, ROLE_LABELS, hasPermission } from "@/lib/admin-roles";
 
+/**
+ * Each entry names the permission needed to reach it, so a Viewer never sees
+ * the product editor and a Designer never sees payments. This is presentation
+ * only — every API route checks the same permission independently, so hiding a
+ * link is a convenience and not the control.
+ */
 const navItems = [
-  { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/products", icon: Package, label: "Products" },
-  { href: "/admin/images", icon: ImageIcon, label: "Site Images" },
-  { href: "/admin/reviews", icon: MessageCircle, label: "Reviews" },
-  { href: "/admin/orders", icon: ShoppingCart, label: "Orders" },
-  { href: "/admin/payment", icon: CreditCard, label: "Payment" },
-  { href: "/admin/shipping", icon: Truck, label: "Shipping" },
-  { href: "/admin/vouchers", icon: Ticket, label: "Vouchers" },
-  { href: "/admin/automation", icon: MessageCircle, label: "WhatsApp" },
-  { href: "/admin/settings", icon: Settings, label: "Site Settings" },
+  { href: "/admin", icon: LayoutDashboard, label: "Dashboard", permission: "content.edit" },
+  { href: "/admin/products", icon: Package, label: "Products", permission: "products.view" },
+  { href: "/admin/images", icon: ImageIcon, label: "Site Images", permission: "media.upload" },
+  { href: "/admin/reviews", icon: MessageCircle, label: "Reviews", permission: "reviews.manage" },
+  { href: "/admin/orders", icon: ShoppingCart, label: "Orders", permission: "orders.view" },
+  { href: "/admin/payment", icon: CreditCard, label: "Payment", permission: "settings.manage" },
+  { href: "/admin/shipping", icon: Truck, label: "Shipping", permission: "settings.manage" },
+  { href: "/admin/vouchers", icon: Ticket, label: "Vouchers", permission: "settings.manage" },
+  { href: "/admin/automation", icon: MessageCircle, label: "WhatsApp", permission: "settings.manage" },
+  { href: "/admin/settings", icon: Settings, label: "Site Settings", permission: "settings.manage" },
+  { href: "/admin/users", icon: Shield, label: "Admin Users", permission: "users.manage" },
 ];
 
 export default function AdminLayout({
@@ -42,6 +51,9 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [me, setMe] = useState<{ name: string; role: AdminRole } | null>(null);
+
+  const allowed = navItems.filter((item) => hasPermission(me?.role, item.permission));
 
   useEffect(() => {
     // Skip auth check on login page
@@ -55,8 +67,21 @@ export default function AdminLayout({
       .then((data) => {
         if (!data.authenticated) {
           router.push("/admin/login");
-        } else {
-          setAuthenticated(true);
+          return;
+        }
+        setMe({ name: data.name, role: data.role });
+        setAuthenticated(true);
+
+        // Someone who types a URL their role can't use lands on the first page
+        // they can. The route behind it would refuse them anyway; this just
+        // avoids an empty screen full of failed requests.
+        const current = navItems.find(
+          (item) =>
+            pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href)),
+        );
+        if (current && !hasPermission(data.role, current.permission)) {
+          const first = navItems.find((item) => hasPermission(data.role, item.permission));
+          router.replace(first ? first.href : "/admin/login");
         }
       })
       .catch(() => router.push("/admin/login"));
@@ -89,10 +114,16 @@ export default function AdminLayout({
       <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold text-olive">Admin Panel</h2>
-          <p className="text-xs text-olive/50 mt-1">Dr.Smells Management</p>
+          {me ? (
+            <p className="text-xs text-olive/50 mt-1">
+              {me.name} · {ROLE_LABELS[me.role]}
+            </p>
+          ) : (
+            <p className="text-xs text-olive/50 mt-1">Dr.Smells Management</p>
+          )}
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => {
+          {allowed.map((item) => {
             const isActive =
               pathname === item.href ||
               (item.href !== "/admin" && pathname.startsWith(item.href));
@@ -133,7 +164,7 @@ export default function AdminLayout({
       {/* Mobile header */}
       <div className="md:hidden fixed top-16 left-0 right-0 z-40 bg-white border-b overflow-x-auto">
         <div className="flex gap-1 p-2">
-          {navItems.map((item) => {
+          {allowed.map((item) => {
             const isActive =
               pathname === item.href ||
               (item.href !== "/admin" && pathname.startsWith(item.href));

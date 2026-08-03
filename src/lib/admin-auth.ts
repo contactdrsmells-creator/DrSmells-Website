@@ -11,44 +11,11 @@ import { createClient } from "@supabase/supabase-js";
  * Roles would be decorative on top of that, so signing is part of this change.
  */
 
-export type AdminRole = "super_admin" | "designer" | "viewer";
+// Roles live in admin-roles.ts so the browser can import them without pulling
+// in next/headers. Re-exported so server code has a single import site.
+import { AdminSession, ROLE_LABELS, hasPermission } from "./admin-roles";
 
-export interface AdminSession {
-  id: string;
-  email: string;
-  name: string;
-  role: AdminRole;
-}
-
-/** What each role may do. Checked server-side; the UI only mirrors it. */
-export const PERMISSIONS: Record<AdminRole, string[]> = {
-  // Full control, including managing other admins.
-  super_admin: ["*"],
-  // Content and media only — never pricing, orders, payments or settings.
-  designer: ["content.edit", "media.upload", "products.view", "orders.view"],
-  // Read-only, and only the sales orders.
-  viewer: ["orders.view"],
-};
-
-export const ROLE_LABELS: Record<AdminRole, string> = {
-  super_admin: "Super Admin",
-  designer: "Designer",
-  viewer: "Viewer",
-};
-
-/**
- * Product fields a designer may change. Anything touching price, stock or
- * identity is excluded — a design role must not be able to alter what a
- * customer is charged.
- */
-export const DESIGNER_PRODUCT_FIELDS = [
-  "description",
-  "short_description",
-  "image_url",
-  "images",
-  "page_sections",
-  "video_url",
-];
+export * from "./admin-roles";
 
 const COOKIE = "admin_token";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -99,12 +66,6 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   const { id, email, name, role } = verified;
   return { id, email, name, role };
-}
-
-export function hasPermission(role: AdminRole | undefined, permission: string): boolean {
-  if (!role) return false;
-  const granted = PERMISSIONS[role] || [];
-  return granted.includes("*") || granted.includes(permission);
 }
 
 /**

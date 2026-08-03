@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,19 +16,23 @@ export default function AdminLoginPage() {
     setError("");
     setLoading(true);
 
+    // An empty email uses the shared-password bootstrap, which the server
+    // stops accepting once a real Super Admin account exists.
     const res = await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify(email.trim() ? { email: email.trim(), password } : { password }),
     });
 
     const data = await res.json();
 
     if (data.success) {
+      // Where they land depends on their role; the layout sends them to the
+      // first page their role can open.
       router.push("/admin");
       router.refresh();
     } else {
-      setError("Invalid password. Please try again.");
+      setError(data.error || "Sign in failed. Please try again.");
     }
     setLoading(false);
   }
@@ -46,6 +51,20 @@ export default function AdminLoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-olive mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 border border-olive/20 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive text-olive"
+              placeholder="name@drsmells.com.my"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-olive mb-1">
               Password
             </label>
             <input
@@ -53,8 +72,7 @@ export default function AdminLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border border-olive/20 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive text-olive"
-              placeholder="Enter admin password"
-              autoFocus
+              placeholder="Enter your password"
             />
           </div>
 
@@ -72,7 +90,7 @@ export default function AdminLoginPage() {
         </form>
 
         <p className="text-center text-olive/40 text-xs mt-6">
-          Default password: drsmells2024
+          Ask a Super Admin if you need an account.
         </p>
       </div>
     </div>
