@@ -56,6 +56,10 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // The link customers receive. Prefer the configured site URL so a message
+  // never carries the raw *.vercel.app host the cron happened to hit.
+  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
+
   const config = await loadAutomationConfig();
   if (!config.enabled) {
     return Response.json({ skipped: "automation disabled", sent: 0 });
@@ -182,7 +186,11 @@ export async function GET(request: Request) {
       customer_name: order.shipping?.name || "there",
       order_id: order.order_number,
       amount: Number(order.total || 0).toFixed(2),
-      payment_url: order.payment_url || "",
+      // Not order.payment_url — a DOKU session is single-use, and by the time a
+      // reminder goes out the customer's payment has usually already failed,
+      // leaving that link unable to take payment. /pay/<order> mints a fresh
+      // checkout when they click, so the message stays usable.
+      payment_url: `${siteOrigin}/pay/${order.order_number}`,
     });
 
     if (result.ok) {

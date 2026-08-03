@@ -139,7 +139,11 @@
       "Bash(awk -F: '{print $1}')",
       "Bash(python3 /private/tmp/claude-501/-Users-kai-Desktop-drsmellswebsiteclaude/adc33ae3-e897-4950-bb1a-7b9623ffa8e5/scratchpad/patch_writes.py)",
       "Bash(python3 /private/tmp/claude-501/-Users-kai-Desktop-drsmellswebsiteclaude/adc33ae3-e897-4950-bb1a-7b9623ffa8e5/scratchpad/patch_errors.py)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /tmp/doku.html -w \"HTTP %{http_code}\\\\nfinal_url: %{url_effective}\\\\n\" -L \"https://checkout.doku.com/checkout-link-v3/5cd69d425f914ae3b8c32042a8e29c5e20260103070123807\")",
+      "Bash(sed -e 's/<[^>]*>/ /g' /tmp/doku.html)",
+      "Bash(grep -iv \"^$\")",
+      "Bash(node --env-file=.env.local -e ' *)"
     ]
   }
 }

@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     customer_name: "Test",
     order_id: "TEST-0000",
     amount: "0.00",
-    payment_url: "https://drsmells.com.my",
+    // Same shape as a real reminder, so the test shows the link customers get.
+    payment_url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://drsmells.com.my"}/pay/TEST01`,
   });
 
   return Response.json({

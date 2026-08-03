@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { createHmac, createHash } from "crypto";
+import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
 import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
 
@@ -324,121 +324,31 @@ export async function POST(request: Request) {
         redirect_url = session.url || "";
       }
     } else if (payment_method === "doku") {
-      const dokuClientId = process.env.DOKU_CLIENT_ID;
-      const dokuSecretKey = process.env.DOKU_SECRET_KEY;
-      // The API Key authenticates the request; the Secret Key only signs it.
-      // Verified via /api/admin/doku-diagnose: secret-key Authorization is
-      // rejected with "Invalid credentials", API-key Authorization passes.
-      const dokuApiKey = process.env.DOKU_API_KEY;
-
-      if (!dokuClientId || !dokuSecretKey || !dokuApiKey) {
+      if (!isDokuConfigured()) {
         return Response.json({ error: "DOKU not configured" }, { status: 500 });
       }
 
       const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-      const dokuBaseUrl = process.env.DOKU_API_URL || "https://api-sandbox.doku.com";
-      const timestamp = new Date().toISOString();
-      const checkoutId = crypto.randomUUID();
 
-      const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      try {
+        const checkout = await createDokuCheckout({
+          orderNumber,
+          total: serverTotal,
+          shippingCost: serverShippingCost,
+          items,
+          voucherCode: voucher_code,
+          customer: shipping,
+          origin,
+        });
+        redirect_url = checkout.checkoutUrl;
 
-      // DOKU rejects the order unless line_items sum exactly to order.amount
-      // ("AMOUNT NOT MATCH"), and rejects negative prices — so a discount cannot
-      // be expressed as its own line. Itemise when the numbers line up, and fall
-      // back to a single net-priced line when they can't (i.e. a voucher was
-      // used, or float rounding leaves a cent unaccounted for).
-      const toCents = (n: number) => Math.round(n * 100);
-
-      const itemisedLines = items.map((item: { product_name: string; quantity: number; unit_price: number }) => ({
-        name: item.product_name,
-        quantity: item.quantity,
-        price: item.unit_price,
-      }));
-
-      if (serverShippingCost > 0) {
-        itemisedLines.push({ name: "Shipping", quantity: 1, price: serverShippingCost });
-      }
-
-      const itemisedCents = itemisedLines.reduce(
-        (sum: number, l: { quantity: number; price: number }) => sum + toCents(l.price) * l.quantity,
-        0,
-      );
-
-      const dokuLineItems = itemisedCents === toCents(serverTotal)
-        ? itemisedLines
-        : [{
-            name: voucher_code ? `Order ${orderNumber} (${voucher_code} applied)` : `Order ${orderNumber}`,
-            quantity: 1,
-            price: serverTotal,
-          }];
-
-      const dokuBody = {
-        id: checkoutId,
-        order: {
-          amount: serverTotal,
-          invoice_number: orderNumber,
-          currency: "MYR",
-          expired_at: expiredAt,
-          line_items: dokuLineItems,
-        },
-        customer: {
-          name: shipping.name,
-          email: shipping.email,
-          phone: shipping.phone,
-          country: "MY",
-          address: `${shipping.address_line1}${shipping.address_line2 ? ", " + shipping.address_line2 : ""}, ${shipping.city}, ${shipping.state} ${shipping.postcode}`,
-        },
-        checkout_experience: {
-          language: "EN",
-          auto_redirect: true,
-          // These are all customer-facing redirects — "Back to Merchant" uses
-          // callback_url. Payment notifications go to the endpoint configured in
-          // the DOKU dashboard, not here; pointing this at the webhook showed
-          // customers a raw JSON error when they clicked back.
-          callback_url: `${origin}/order-confirmation?order=${orderNumber}`,
-          callback_url_cancel: `${origin}/checkout`,
-          callback_url_result: `${origin}/order-confirmation?order=${orderNumber}`,
-        },
-      };
-
-      const bodyString = JSON.stringify(dokuBody);
-      const digest = createHash("sha256").update(bodyString).digest("base64");
-      const componentSignature = `Client-Id:${dokuClientId}\nRequest-Id:${checkoutId}\nRequest-Timestamp:${timestamp}\nRequest-Target:/v3/checkouts\nDigest:${digest}`;
-      const signature = createHmac("sha256", dokuSecretKey).update(componentSignature).digest("base64");
-
-      const dokuRes = await fetch(`${dokuBaseUrl}/v3/checkouts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Client-Id": dokuClientId,
-          "Request-Id": checkoutId,
-          "Request-Timestamp": timestamp,
-          "Signature": `HMACSHA256=${signature}`,
-          "Authorization": `Basic ${Buffer.from(dokuApiKey).toString("base64")}`,
-          "API-Version": "arabica.2025-12-01",
-        },
-        body: bodyString,
-      });
-
-      if (!dokuRes.ok) {
-        const errText = await dokuRes.text().catch(() => "");
-        console.error(
-          `DOKU checkout failed [${dokuRes.status}] order=${orderNumber} amount=${serverTotal} lines=${dokuLineItems.length}:`,
-          errText,
-        );
+        await supabase
+          .from("orders")
+          .update({ payment_reference: checkout.checkoutId, payment_url: redirect_url || null })
+          .eq("id", order.id);
+      } catch {
         return Response.json({ error: "Failed to create DOKU checkout" }, { status: 500 });
       }
-
-      const dokuData = await dokuRes.json();
-      redirect_url = dokuData.payment?.checkout_url || "";
-
-      // Store the checkout link so an unpaid-order reminder can send the customer
-      // straight back to it. DOKU expires these after 24h, which is why the
-      // reminder delay is measured in hours.
-      await supabase
-        .from("orders")
-        .update({ payment_reference: checkoutId, payment_url: redirect_url || null })
-        .eq("id", order.id);
     }
 
     return Response.json({
