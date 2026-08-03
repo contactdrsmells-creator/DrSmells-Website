@@ -143,7 +143,8 @@
       "Bash(curl -s -o /tmp/doku.html -w \"HTTP %{http_code}\\\\nfinal_url: %{url_effective}\\\\n\" -L \"https://checkout.doku.com/checkout-link-v3/5cd69d425f914ae3b8c32042a8e29c5e20260103070123807\")",
       "Bash(sed -e 's/<[^>]*>/ /g' /tmp/doku.html)",
       "Bash(grep -iv \"^$\")",
-      "Bash(node --env-file=.env.local -e ' *)"
+      "Bash(node --env-file=.env.local -e ' *)",
+      "Bash(node --input-type=module --check)"
     ]
   }
 }

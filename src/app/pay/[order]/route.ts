@@ -50,6 +50,8 @@ async function createStripeCheckout(
     items: OrderItem[];
     shipping_cost: number | null;
     shipping: { email?: string } | null;
+    discount: number | null;
+    voucher_code: string | null;
   },
   origin: string,
 ): Promise<string> {
@@ -88,9 +90,25 @@ async function createStripeCheckout(
     });
   }
 
+  // Stripe rejects negative line items, so a voucher has to be expressed as a
+  // one-off coupon — the same way checkout does it. Without this the customer
+  // resuming payment would be quoted the full price and lose their discount.
+  const discount = Number(order.discount || 0);
+  const discounts = discount > 0
+    ? [{
+        coupon: (await stripe.coupons.create({
+          amount_off: Math.round(discount * 100),
+          currency: "myr",
+          duration: "once",
+          name: order.voucher_code || "Discount",
+        })).id,
+      }]
+    : undefined;
+
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: lineItems,
+    discounts,
     mode: hasSubscription ? "subscription" : "payment",
     success_url: `${origin}/order-confirmation?order=${order.order_number}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/checkout`,
@@ -127,7 +145,7 @@ export async function GET(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, payment_status, payment_method, total, shipping_cost, items, shipping, voucher_code",
+      "id, order_number, status, payment_status, payment_method, total, shipping_cost, discount, items, shipping, voucher_code",
     )
     .eq("order_number", orderNumber)
     .single();
