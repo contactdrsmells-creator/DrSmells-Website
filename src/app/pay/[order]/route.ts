@@ -27,6 +27,88 @@ function getSupabase() {
 
 const PAID_STATUSES = ["paid", "processing", "shipped", "completed", "delivered"];
 
+interface OrderItem {
+  product_name: string;
+  variation?: string;
+  quantity: number;
+  unit_price: number;
+  /** Present only on subscription lines; holds the recurring price and cadence. */
+  subscription?: { price: number; interval_months: number };
+}
+
+/**
+ * Rebuilds a Stripe Checkout Session for an unpaid order.
+ *
+ * Subscription lines are recreated as recurring prices rather than one-off
+ * charges — otherwise resuming a subscription order would take a single payment
+ * and quietly never set up the recurring billing the customer signed up for.
+ */
+async function createStripeCheckout(
+  order: {
+    order_number: string;
+    id: string;
+    items: OrderItem[];
+    shipping_cost: number | null;
+    shipping: { email?: string } | null;
+  },
+  origin: string,
+): Promise<string> {
+  const Stripe = (await import("stripe")).default;
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+  const items = order.items || [];
+  const hasSubscription = items.some((item) => item.subscription);
+
+  const lineItems = items.map((item) => ({
+    price_data: {
+      currency: "myr",
+      product_data: { name: `${item.product_name}${item.variation ? ` (${item.variation})` : ""}` },
+      unit_amount: Math.round((item.subscription?.price ?? item.unit_price) * 100),
+      ...(item.subscription
+        ? {
+            recurring: {
+              interval: "month" as const,
+              interval_count: item.subscription.interval_months,
+            },
+          }
+        : {}),
+    },
+    quantity: item.quantity,
+  }));
+
+  const shippingCost = Number(order.shipping_cost || 0);
+  if (shippingCost > 0) {
+    lineItems.push({
+      price_data: {
+        currency: "myr",
+        product_data: { name: "Shipping" },
+        unit_amount: Math.round(shippingCost * 100),
+      },
+      quantity: 1,
+    });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: lineItems,
+    mode: hasSubscription ? "subscription" : "payment",
+    success_url: `${origin}/order-confirmation?order=${order.order_number}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/checkout`,
+    metadata: { order_number: order.order_number, order_id: order.id },
+    customer_email: order.shipping?.email,
+    ...(hasSubscription
+      ? {
+          subscription_data: {
+            metadata: { order_number: order.order_number, order_id: order.id },
+          },
+        }
+      : {}),
+  });
+
+  if (!session.url) throw new Error("Stripe returned no checkout URL");
+  return session.url;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ order: string }> },
@@ -44,7 +126,9 @@ export async function GET(
   const supabase = getSupabase();
   const { data: order } = await supabase
     .from("orders")
-    .select("id, order_number, status, payment_status, total, shipping_cost, items, shipping, voucher_code")
+    .select(
+      "id, order_number, status, payment_status, payment_method, total, shipping_cost, items, shipping, voucher_code",
+    )
     .eq("order_number", orderNumber)
     .single();
 
@@ -55,27 +139,46 @@ export async function GET(
     order.payment_status === "paid" || PAID_STATUSES.includes(String(order.status));
   if (alreadyPaid) return Response.redirect(confirmation, 302);
 
-  if (!isDokuConfigured()) return Response.redirect(confirmation, 302);
+  // Resume with the method the customer originally chose. Sending a Stripe
+  // order to DOKU would charge them through a gateway they never picked, and
+  // would turn a subscription into a single payment.
+  const usesStripe = order.payment_method === "stripe";
+
+  if (usesStripe ? !process.env.STRIPE_SECRET_KEY : !isDokuConfigured()) {
+    return Response.redirect(confirmation, 302);
+  }
 
   try {
-    const checkout = await createDokuCheckout({
-      orderNumber: order.order_number,
-      total: Number(order.total),
-      shippingCost: Number(order.shipping_cost || 0),
-      items: order.items || [],
-      voucherCode: order.voucher_code,
-      customer: order.shipping || {},
-      origin,
-    });
+    let checkoutUrl: string;
+    let reference: string | null = null;
+
+    if (usesStripe) {
+      checkoutUrl = await createStripeCheckout(order, origin);
+    } else {
+      const checkout = await createDokuCheckout({
+        orderNumber: order.order_number,
+        total: Number(order.total),
+        shippingCost: Number(order.shipping_cost || 0),
+        items: order.items || [],
+        voucherCode: order.voucher_code,
+        customer: order.shipping || {},
+        origin,
+      });
+      checkoutUrl = checkout.checkoutUrl;
+      reference = checkout.checkoutId;
+    }
 
     // Keep the newest link on the order so admin and any later reminder show
     // the one that actually works.
     await supabase
       .from("orders")
-      .update({ payment_reference: checkout.checkoutId, payment_url: checkout.checkoutUrl })
+      .update({
+        payment_url: checkoutUrl,
+        ...(reference ? { payment_reference: reference } : {}),
+      })
       .eq("id", order.id);
 
-    return Response.redirect(checkout.checkoutUrl, 302);
+    return Response.redirect(checkoutUrl, 302);
   } catch (err) {
     console.error(`Resume payment failed for ${orderNumber}:`, err);
     // Better to land on their order than a stack trace; they can contact support.
