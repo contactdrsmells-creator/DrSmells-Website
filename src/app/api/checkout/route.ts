@@ -231,13 +231,17 @@ export async function POST(request: Request) {
           });
         }
 
-        // Stripe rejects negative line items — a one-off coupon is the supported
-        // way to apply a voucher discount.
+        // Stripe rejects negative line items — a coupon is the supported way to
+        // apply a voucher discount.
+        //
+        // "forever" rather than "once": on a subscription the customer should
+        // keep paying the price they signed up at, so the discount repeats on
+        // every renewal instead of the second invoice jumping to full price.
         const discounts = serverDiscount > 0
           ? [{ coupon: (await stripe.coupons.create({
               amount_off: Math.round(serverDiscount * 100),
               currency: "myr",
-              duration: "once",
+              duration: "forever",
               name: voucher_code || "Discount",
             })).id }]
           : undefined;

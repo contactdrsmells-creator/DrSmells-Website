@@ -144,7 +144,8 @@
       "Bash(sed -e 's/<[^>]*>/ /g' /tmp/doku.html)",
       "Bash(grep -iv \"^$\")",
       "Bash(node --env-file=.env.local -e ' *)",
-      "Bash(node --input-type=module --check)"
+      "Bash(node --input-type=module --check)",
+      "Bash(awk 'NR>=180 && NR<=310 && \\(/has_subscription && subscriptionItems/ || /duration:/ || /mode: \"subscription\"/ || /mode: \"payment\"/ || /} else {/\\)' src/app/api/checkout/route.ts)"
     ]
   }
 }

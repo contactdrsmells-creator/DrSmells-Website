@@ -93,13 +93,17 @@ async function createStripeCheckout(
   // Stripe rejects negative line items, so a voucher has to be expressed as a
   // one-off coupon — the same way checkout does it. Without this the customer
   // resuming payment would be quoted the full price and lose their discount.
+  //
+  // On a subscription the discount repeats forever, so the customer keeps the
+  // price they signed up at rather than the second invoice jumping to full
+  // price. A one-off order has no later invoice, so the duration is moot.
   const discount = Number(order.discount || 0);
   const discounts = discount > 0
     ? [{
         coupon: (await stripe.coupons.create({
           amount_off: Math.round(discount * 100),
           currency: "myr",
-          duration: "once",
+          duration: hasSubscription ? "forever" : "once",
           name: order.voucher_code || "Discount",
         })).id,
       }]
