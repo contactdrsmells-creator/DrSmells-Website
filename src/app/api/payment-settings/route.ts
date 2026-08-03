@@ -2,7 +2,9 @@ import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+// Service role: site_settings is locked by RLS, so the public key cannot write.
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 function getSupabase() {
   return createClient(supabaseUrl, supabaseKey);

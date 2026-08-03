@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Save } from "lucide-react";
+import { upsertSetting } from "@/lib/admin-content";
 
 interface Settings {
   brand: { name: string; tagline: string; mission: string; company: string };
@@ -49,9 +50,7 @@ export default function AdminSettings() {
     }
     setSaving(true);
     for (const [key, value] of Object.entries(settings)) {
-      await supabase
-        .from("site_settings")
-        .upsert({ key, value, updated_at: new Date().toISOString() });
+      { const { error } = await upsertSetting(key, value); if (error) alert(error.message); }
     }
     setSaving(false);
     setSaved(true);

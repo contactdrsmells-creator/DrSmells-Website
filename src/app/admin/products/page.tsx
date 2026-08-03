@@ -6,6 +6,7 @@ import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
+import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 
 // Collapsible panel inside modal
 function Panel({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -185,10 +186,10 @@ export default function AdminProducts() {
 
     let error;
     if (isNew) {
-      const res = await supabase.from("products").insert(productData);
+      const res = await createRecord("products", productData);
       error = res.error;
     } else {
-      const res = await supabase.from("products").update(productData).eq("id", editing.id);
+      const res = await updateRecord("products", editing.id, productData);
       error = res.error;
     }
     setSaving(false);
@@ -204,7 +205,7 @@ export default function AdminProducts() {
   async function handleDelete(id: string) {
     if (!isConfigured) return;
     if (!confirm("Delete this product?")) return;
-    await supabase.from("products").delete().eq("id", id);
+    { const { error } = await deleteRecord("products", id); if (error) alert(error.message); }
     showToast("Product deleted");
     loadProducts();
   }
@@ -218,7 +219,7 @@ export default function AdminProducts() {
       slug: `${product.slug}-copy-${Date.now()}`,
       sort_order: products.length,
     };
-    const { error } = await supabase.from("products").insert(dupData);
+    const { error } = await createRecord("products", dupData);
     if (error) { alert("Failed to duplicate: " + error.message); return; }
     loadProducts();
   }
@@ -231,8 +232,8 @@ export default function AdminProducts() {
     const b = products[swapIdx];
     // Use explicit index-based sort orders to avoid duplicate sort_order issues
     await Promise.all([
-      supabase.from("products").update({ sort_order: swapIdx }).eq("id", a.id),
-      supabase.from("products").update({ sort_order: idx }).eq("id", b.id),
+      updateRecord("products", a.id, { sort_order: swapIdx }),
+      updateRecord("products", b.id, { sort_order: idx }),
     ]);
     loadProducts();
   }

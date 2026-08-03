@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
+import { createRecord, deleteRecord, updateRecord, upsertSetting } from "@/lib/admin-content";
 
 // ============================================================
 // Types
@@ -255,9 +256,7 @@ export default function AdminDashboard() {
     const updated = { ...siteImages, [key]: url };
     setSiteImages(updated);
 
-    const { error } = await supabase
-      .from("site_settings")
-      .upsert({ key: "site_images", value: updated, updated_at: new Date().toISOString() });
+    const { error } = await upsertSetting("site_images", updated);
 
     if (!error) showToast(`Image saved!`);
   }
@@ -287,9 +286,9 @@ export default function AdminDashboard() {
     };
 
     if (isNewProduct) {
-      await supabase.from("products").insert(data);
+      { const { error } = await createRecord("products", data); if (error) alert(error.message); }
     } else {
-      await supabase.from("products").update(data).eq("id", editingProduct.id);
+      { const { error } = await updateRecord("products", editingProduct.id, data); if (error) alert(error.message); }
     }
     setSaving(null);
     setEditingProduct(null);
@@ -299,7 +298,7 @@ export default function AdminDashboard() {
 
   async function deleteProduct(id: string) {
     if (!confirm("Delete this product?")) return;
-    await supabase.from("products").delete().eq("id", id);
+    { const { error } = await deleteRecord("products", id); if (error) alert(error.message); }
     showToast("Product deleted");
     loadAll();
   }
@@ -319,9 +318,9 @@ export default function AdminDashboard() {
     };
 
     if (isNewTestimonial) {
-      await supabase.from("testimonials").insert(data);
+      { const { error } = await createRecord("testimonials", data); if (error) alert(error.message); }
     } else {
-      await supabase.from("testimonials").update(data).eq("id", editingTestimonial.id);
+      { const { error } = await updateRecord("testimonials", editingTestimonial.id, data); if (error) alert(error.message); }
     }
     setSaving(null);
     setEditingTestimonial(null);
@@ -331,7 +330,7 @@ export default function AdminDashboard() {
 
   async function deleteTestimonial(id: string) {
     if (!confirm("Delete this testimonial?")) return;
-    await supabase.from("testimonials").delete().eq("id", id);
+    { const { error } = await deleteRecord("testimonials", id); if (error) alert(error.message); }
     showToast("Testimonial deleted");
     loadAll();
   }
@@ -350,9 +349,9 @@ export default function AdminDashboard() {
     };
 
     if (isNewFaq) {
-      await supabase.from("faqs").insert(data);
+      { const { error } = await createRecord("faqs", data); if (error) alert(error.message); }
     } else {
-      await supabase.from("faqs").update(data).eq("id", editingFaq.id);
+      { const { error } = await updateRecord("faqs", editingFaq.id, data); if (error) alert(error.message); }
     }
     setSaving(null);
     setEditingFaq(null);
@@ -362,7 +361,7 @@ export default function AdminDashboard() {
 
   async function deleteFaq(id: string) {
     if (!confirm("Delete this FAQ?")) return;
-    await supabase.from("faqs").delete().eq("id", id);
+    { const { error } = await deleteRecord("faqs", id); if (error) alert(error.message); }
     showToast("FAQ deleted");
     loadAll();
   }
@@ -372,13 +371,13 @@ export default function AdminDashboard() {
   // ============================================================
   async function saveBanner(banner: Banner) {
     setSaving("banner");
-    await supabase.from("hero_banners").update({
+    { const { error } = await updateRecord("hero_banners", banner.id, {
       title: banner.title,
       subtitle: banner.subtitle,
       cta_text: banner.cta_text,
       cta_link: banner.cta_link,
       video_url: banner.video_url,
-    }).eq("id", banner.id);
+    }); if (error) alert(error.message); }
     setSaving(null);
     showToast("Banner saved!");
   }
@@ -592,7 +591,7 @@ export default function AdminDashboard() {
           onClick={async () => {
             const updated = { ...siteImages, value_props_heading: valuePropsHeading, value_props: JSON.stringify(valueProps) };
             setSiteImages(updated);
-            await supabase.from("site_settings").upsert({ key: "site_images", value: updated, updated_at: new Date().toISOString() });
+            { const { error } = await upsertSetting("site_images", updated); if (error) alert(error.message); }
             showToast("Value propositions saved!");
           }}
           className="mt-4 px-4 py-2 bg-olive text-white rounded-lg text-sm font-medium hover:bg-sage-dark"

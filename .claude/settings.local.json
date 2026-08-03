@@ -136,7 +136,10 @@
       "Bash(python3 -)",
       "Bash(git rm *)",
       "Bash(node -e \"console.log\\('token format:', Buffer.from\\('admin:'+Date.now\\(\\)\\).toString\\('base64'\\)\\)\")",
-      "Bash(awk -F: '{print $1}')"
+      "Bash(awk -F: '{print $1}')",
+      "Bash(python3 /private/tmp/claude-501/-Users-kai-Desktop-drsmellswebsiteclaude/adc33ae3-e897-4950-bb1a-7b9623ffa8e5/scratchpad/patch_writes.py)",
+      "Bash(python3 /private/tmp/claude-501/-Users-kai-Desktop-drsmellswebsiteclaude/adc33ae3-e897-4950-bb1a-7b9623ffa8e5/scratchpad/patch_errors.py)",
+      "Bash(npx tsc *)"
     ]
   }
 }

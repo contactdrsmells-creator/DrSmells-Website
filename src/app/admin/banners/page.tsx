@@ -5,6 +5,7 @@ import { HeroBanner } from "@/lib/types";
 import { sampleBanners } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X, Upload } from "lucide-react";
+import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 
 export default function AdminBanners() {
   const [banners, setBanners] = useState<HeroBanner[]>([]);
@@ -48,9 +49,9 @@ export default function AdminBanners() {
     };
 
     if (isNew) {
-      await supabase.from("hero_banners").insert(bannerData);
+      { const { error } = await createRecord("hero_banners", bannerData); if (error) alert(error.message); }
     } else {
-      await supabase.from("hero_banners").update(bannerData).eq("id", editing.id);
+      { const { error } = await updateRecord("hero_banners", editing.id, bannerData); if (error) alert(error.message); }
     }
     setSaving(false);
     setEditing(null);
@@ -81,7 +82,7 @@ export default function AdminBanners() {
   async function handleDelete(id: string) {
     if (!isConfigured) return;
     if (!confirm("Delete this banner?")) return;
-    await supabase.from("hero_banners").delete().eq("id", id);
+    { const { error } = await deleteRecord("hero_banners", id); if (error) alert(error.message); }
     loadBanners();
   }
 

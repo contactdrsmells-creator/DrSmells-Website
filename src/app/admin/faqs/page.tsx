@@ -5,6 +5,7 @@ import { FAQ } from "@/lib/types";
 import { sampleFAQs } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X } from "lucide-react";
+import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 
 export default function AdminFAQs() {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
@@ -28,15 +29,15 @@ export default function AdminFAQs() {
     if (!editing || !isConfigured) { alert("Connect Supabase to save."); return; }
     setSaving(true);
     const d = { question: editing.question, answer: editing.answer, sort_order: editing.sort_order || 0 };
-    if (isNew) await supabase.from("faqs").insert(d);
-    else await supabase.from("faqs").update(d).eq("id", editing.id);
+    if (isNew) { const { error } = await createRecord("faqs", d); if (error) alert(error.message); }
+    else { const { error } = await updateRecord("faqs", editing.id, d); if (error) alert(error.message); }
     setSaving(false); setEditing(null); load();
   }
 
   async function handleDelete(id: string) {
     if (!isConfigured) return;
     if (!confirm("Delete this FAQ?")) return;
-    await supabase.from("faqs").delete().eq("id", id);
+    { const { error } = await deleteRecord("faqs", id); if (error) alert(error.message); }
     load();
   }
 

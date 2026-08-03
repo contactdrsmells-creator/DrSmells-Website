@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, Check, X, Image as ImageIcon, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import { upsertSetting } from "@/lib/admin-content";
 
 interface UploadedImage {
   url: string;
@@ -57,8 +58,7 @@ export default function AdminImages() {
   // Load existing site images on mount
   useEffect(() => {
     if (!isConfigured) return;
-    supabase
-      .from("site_settings")
+    supabase.from("site_settings")
       .select("value")
       .eq("key", "site_images")
       .single()
@@ -72,9 +72,7 @@ export default function AdminImages() {
   async function saveSiteImages(updated: Record<string, string>) {
     if (!isConfigured) return;
     setSiteImages(updated);
-    await supabase
-      .from("site_settings")
-      .upsert({ key: "site_images", value: updated, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    { const { error } = await upsertSetting("site_images", updated); if (error) alert(error.message); }
   }
 
   async function handleUpload(file: File, folder: string, slotId?: string) {

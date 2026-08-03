@@ -5,6 +5,7 @@ import { Testimonial } from "@/lib/types";
 import { sampleTestimonials } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X, Star } from "lucide-react";
+import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 
 export default function AdminTestimonials() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -30,15 +31,15 @@ export default function AdminTestimonials() {
     if (!editing || !isConfigured) { alert("Connect Supabase to save."); return; }
     setSaving(true);
     const d = { name: editing.name, rating: editing.rating || 5, review: editing.review, verified: editing.verified ?? true };
-    if (isNew) await supabase.from("testimonials").insert(d);
-    else await supabase.from("testimonials").update(d).eq("id", editing.id);
+    if (isNew) { const { error } = await createRecord("testimonials", d); if (error) alert(error.message); }
+    else { const { error } = await updateRecord("testimonials", editing.id, d); if (error) alert(error.message); }
     setSaving(false); setEditing(null); load();
   }
 
   async function handleDelete(id: string) {
     if (!isConfigured) return;
     if (!confirm("Delete this testimonial?")) return;
-    await supabase.from("testimonials").delete().eq("id", id);
+    { const { error } = await deleteRecord("testimonials", id); if (error) alert(error.message); }
     load();
   }
 
