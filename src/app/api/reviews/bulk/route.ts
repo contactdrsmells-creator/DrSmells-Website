@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -23,10 +23,8 @@ type Action = keyof typeof ACTIONS | "delete";
 const MAX_IDS = 500;
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("reviews.manage");
+  if (auth instanceof Response) return auth;
 
   let body: { ids?: unknown; action?: unknown };
   try {

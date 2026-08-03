@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { loadAutomationConfig, normalisePhone, sendToStrive } from "@/lib/whatsapp-automation";
 
 /**
@@ -8,10 +8,8 @@ import { loadAutomationConfig, normalisePhone, sendToStrive } from "@/lib/whatsa
  * Sends regardless of the enabled flag — the point is to test before enabling.
  */
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const { phone } = await request.json().catch(() => ({ phone: "" }));
   const normalised = normalisePhone(phone);

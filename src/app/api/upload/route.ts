@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -11,11 +11,8 @@ function getSupabase() {
 const BUCKET = "uploads";
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("media.upload");
+  if (auth instanceof Response) return auth;
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -45,11 +45,8 @@ export async function GET(request: Request) {
 
   // Admin wants all reviews
   if (all === "true") {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("admin_token");
-    if (!token) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("reviews.manage");
+    if (auth instanceof Response) return auth;
 
     const { rows, error } = await fetchAllRows((from, to) =>
       db
@@ -138,11 +135,8 @@ export async function POST(request: Request) {
 
 // PATCH — admin: approve/reject/delete reviews
 export async function PATCH(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("reviews.manage");
+  if (auth instanceof Response) return auth;
 
   const { id, approved, verified } = await request.json();
   if (!id) return Response.json({ error: "Review id required" }, { status: 400 });
@@ -159,11 +153,8 @@ export async function PATCH(request: Request) {
 
 // DELETE — admin: delete a review
 export async function DELETE(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("reviews.manage");
+  if (auth instanceof Response) return auth;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

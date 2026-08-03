@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { createHmac, createHash } from "crypto";
 
 /**
@@ -16,10 +16,8 @@ import { createHmac, createHash } from "crypto";
  * Returns only DOKU's responses — never the credentials themselves.
  */
 export async function GET() {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const clientId = process.env.DOKU_CLIENT_ID;
   const secretKey = process.env.DOKU_SECRET_KEY;

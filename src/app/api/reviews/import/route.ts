@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -31,11 +31,8 @@ function parseImportDate(value: unknown): string | null {
 
 export async function POST(request: Request) {
   // Auth check
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("reviews.manage");
+  if (auth instanceof Response) return auth;
 
   const { reviews } = await request.json();
 

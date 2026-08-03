@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, createHash } from "crypto";
 import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";

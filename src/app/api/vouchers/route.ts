@@ -1,5 +1,5 @@
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -9,11 +9,8 @@ function getSupabase() {
 }
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const supabase = getSupabase();
   const { data, error } = await supabase
@@ -29,11 +26,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const body = await request.json();
   const supabase = getSupabase();
@@ -60,11 +54,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const body = await request.json();
   const supabase = getSupabase();
@@ -93,11 +84,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

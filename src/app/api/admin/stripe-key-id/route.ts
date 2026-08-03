@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 
 /**
  * Admin-only. Identifies which Stripe key THIS site uses, so the old site's key
@@ -9,10 +9,8 @@ import { cookies } from "next/headers";
  * itself is never returned.
  */
 export async function GET() {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) {

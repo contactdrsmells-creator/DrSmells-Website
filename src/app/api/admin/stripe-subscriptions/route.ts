@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 
 /**
  * Admin-only, READ-ONLY audit of live Stripe subscriptions.
@@ -14,10 +14,8 @@ import { cookies } from "next/headers";
  * automate from a diagnostic.
  */
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeSecretKey) {

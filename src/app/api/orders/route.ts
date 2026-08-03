@@ -1,5 +1,5 @@
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -41,11 +41,8 @@ export async function GET(request: Request) {
   }
 
   // Admin: fetch all orders
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("orders.view");
+  if (auth instanceof Response) return auth;
 
   const { data, error } = await supabase
     .from("orders")
@@ -61,11 +58,8 @@ export async function GET(request: Request) {
 
 // POST: create test order (admin only) — for testing CRM integration
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("orders.edit");
+  if (auth instanceof Response) return auth;
 
   try {
     const body = await request.json();
@@ -162,11 +156,8 @@ export async function POST(request: Request) {
 
 // PUT: update order status (admin only)
 export async function PUT(request: Request) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("orders.edit");
+  if (auth instanceof Response) return auth;
 
   try {
     const { id, status, payment_status, notes } = await request.json();

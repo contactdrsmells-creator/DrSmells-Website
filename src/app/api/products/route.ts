@@ -1,12 +1,9 @@
+import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token");
-  if (!token) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("products.write");
+  if (auth instanceof Response) return auth;
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",

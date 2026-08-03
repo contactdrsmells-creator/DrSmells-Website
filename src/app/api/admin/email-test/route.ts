@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import nodemailer from "nodemailer";
 
 /**
@@ -10,10 +10,8 @@ import nodemailer from "nodemailer";
  * look identical from the outside otherwise. Never returns the password.
  */
 export async function GET(request: Request) {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;

@@ -130,7 +130,13 @@
       "Bash(curl -s -o /dev/null -w \"  HTTP %{http_code}\\\\n\" https://drsmells-website.vercel.app/api/cron/whatsapp-reminders)",
       "Bash(perl -0pi -e 's/\\\\.update\\\\\\(\\\\{ payment_reference: session\\\\.id \\\\}\\\\\\)/.update\\({ payment_reference: session.id, payment_url: session.url || null }\\)/g' src/app/api/checkout/route.ts)",
       "Bash(node --check pages/api/orders/index.js)",
-      "Bash(node --check pages/api/webhook/website-order.js)"
+      "Bash(node --check pages/api/webhook/website-order.js)",
+      "Bash(node --check pages/api/send-tracking.js)",
+      "Bash(perl -0pi -e 's/<Layout page=\"watsons\">/<Layout title=\"Watsons\">/' pages/dashboard/watsons.js)",
+      "Bash(python3 -)",
+      "Bash(git rm *)",
+      "Bash(node -e \"console.log\\('token format:', Buffer.from\\('admin:'+Date.now\\(\\)\\).toString\\('base64'\\)\\)\")",
+      "Bash(awk -F: '{print $1}')"
     ]
   }
 }

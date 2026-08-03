@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { requirePermission } from "@/lib/admin-auth";
 import {
   DEFAULT_AUTOMATION,
   SETTINGS_KEY,
@@ -10,10 +10,8 @@ import {
 const MASK = "••••••••";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   const config = await loadAutomationConfig();
 
@@ -26,10 +24,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const cookieStore = await cookies();
-  if (!cookieStore.get("admin_token")) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requirePermission("settings.manage");
+  if (auth instanceof Response) return auth;
 
   try {
     const body = await request.json();
