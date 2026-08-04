@@ -1,0 +1,27 @@
+name: Payment status re-check
+
+on:
+  schedule:
+    - cron: "30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger payment status check
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "https://drsmells-website.vercel.app/api/cron/payment-status-check")
+
+          body=$(echo "$response" | sed '$d')
+          code=$(echo "$response" | tail -n1)
+
+          echo "HTTP $code"
+          echo "$body"
+
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "Payment status check failed"
+            exit 1
+          fi
