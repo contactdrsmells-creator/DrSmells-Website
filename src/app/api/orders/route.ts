@@ -167,6 +167,15 @@ export async function PUT(request: Request) {
     }
 
     const supabase = getSupabase();
+
+    // Read the current state first, so we can tell whether this change is what
+    // turns the order paid — and avoid syncing one that already was.
+    const { data: before } = await supabase
+      .from("orders")
+      .select("order_number, status, payment_status")
+      .eq("id", id)
+      .single();
+
     const updateData: Record<string, string> = { updated_at: new Date().toISOString() };
     if (status) updateData.status = status;
     if (payment_status) updateData.payment_status = payment_status;
@@ -179,6 +188,27 @@ export async function PUT(request: Request) {
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
+    }
+
+    // Marking an order paid by hand now reaches the CRM too.
+    //
+    // Only the payment webhooks used to sync, so when a gateway notification
+    // didn't arrive and the status was corrected here instead, the order never
+    // appeared in the CRM and went unfulfilled. Someone fixing the status in
+    // the admin panel reasonably expects the same outcome as the webhook.
+    const wasPaid = before?.payment_status === "paid" || before?.status === "paid";
+    const isNowPaid = payment_status === "paid" || status === "paid";
+
+    if (isNowPaid && !wasPaid && before?.order_number) {
+      const { syncOrderToCRM } = await import("@/lib/crm-sync");
+      const { sendOrderConfirmationEmail } = await import("@/lib/email");
+
+      await syncOrderToCRM(before.order_number).catch((err: Error) =>
+        console.error("[CRM Sync] Error on manual status change:", err),
+      );
+      await sendOrderConfirmationEmail(before.order_number).catch((err: Error) =>
+        console.error("[Email] Error on manual status change:", err),
+      );
     }
 
     return Response.json({ success: true });

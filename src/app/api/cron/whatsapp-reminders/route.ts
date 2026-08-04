@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "crypto";
 import {
+  CUSTOMER_COOLDOWN_HOURS,
   PAYMENT_GRACE_MINUTES,
   QUIET_HOURS_END,
   currentHourInBusinessTimezone,
@@ -127,6 +128,28 @@ export async function GET(request: Request) {
     if (at > (lastPaidAt.get(phone) ?? 0)) lastPaidAt.set(phone, at);
   }
 
+  // When each customer was last messaged, so the "once per customer" rule holds
+  // across runs and not just within one. Grouping alone only covers orders that
+  // come due together; a retry an hour later would arrive as a second message.
+  const cooldownFrom = new Date(
+    now - CUSTOMER_COOLDOWN_HOURS * 3600_000,
+  ).toISOString();
+
+  const { data: remindedOrders } = await supabase
+    .from("orders")
+    .select("shipping, reminder_sent_at")
+    .gte("reminder_sent_at", cooldownFrom)
+    .limit(500);
+
+  const lastRemindedAt = new Map<string, string>();
+  for (const reminded of remindedOrders || []) {
+    const phone = normalisePhone((reminded.shipping as { phone?: string } | null)?.phone);
+    if (!phone) continue;
+    const at = reminded.reminder_sent_at as string;
+    const seen = lastRemindedAt.get(phone);
+    if (!seen || at > seen) lastRemindedAt.set(phone, at);
+  }
+
   // Group by customer. Retrying checkout leaves several identical pending
   // orders; the customer should hear from us once.
   const byPhone = new Map<string, OrderRow[]>();
@@ -160,6 +183,23 @@ export async function GET(request: Request) {
         order: group.map((o) => o.order_number).join(", "),
         status: "skipped",
         reason: "customer completed payment",
+      });
+      continue;
+    }
+
+    // Already messaged recently — these are further attempts at a purchase we
+    // have already chased, so they are silenced rather than messaged again.
+    //
+    // The existing timestamp is reused rather than stamping "now", so a
+    // customer who keeps creating orders can't push their own cooldown forward
+    // indefinitely and end up never hearing from us again.
+    const remindedAt = lastRemindedAt.get(phone);
+    if (remindedAt) {
+      await supabase.from("orders").update({ reminder_sent_at: remindedAt }).in("id", ids);
+      results.push({
+        order: group.map((o) => o.order_number).join(", "),
+        status: "skipped",
+        reason: "customer already messaged within the cooldown",
       });
       continue;
     }

@@ -44,6 +44,17 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
 export const PAYMENT_GRACE_MINUTES = 30;
 
 /**
+ * One reminder per customer within this window, however many unpaid orders
+ * they have.
+ *
+ * Grouping by phone only covers orders that come due in the same run. Someone
+ * who retries checkout an hour later, or whose earlier order becomes eligible
+ * afterwards, would otherwise be messaged again — which is what happened to a
+ * customer with two failed attempts: two identical messages, hours apart.
+ */
+export const CUSTOMER_COOLDOWN_HOURS = 24;
+
+/**
  * Messages only go out between these hours, Malaysia time. A checkout at 9pm
  * would otherwise reach the customer at midnight.
  *
