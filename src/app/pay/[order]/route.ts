@@ -211,7 +211,7 @@ export async function GET(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, order_number, status, payment_status, payment_method, total, shipping_cost, discount, items, shipping, voucher_code",
+      "id, order_number, status, payment_status, payment_method, total, shipping_cost, discount, items, shipping, voucher_code, payment_url, payment_url_created_at",
     )
     .eq("order_number", orderNumber)
     .single();
@@ -222,6 +222,22 @@ export async function GET(
   const alreadyPaid =
     order.payment_status === "paid" || PAID_STATUSES.includes(String(order.status));
   if (alreadyPaid) return Response.redirect(confirmation, 302);
+
+  // A link opened again within a few minutes reuses the checkout just created.
+  //
+  // Minting a fresh one on every visit is what keeps a days-old reminder
+  // working, but it also registers a pending transaction at DOKU each time —
+  // tapping the same link twice a minute apart produced two. Within this window
+  // the existing checkout is certainly still live, so reusing it costs nothing
+  // and keeps the payment reports honest.
+  const REUSE_WINDOW_MINUTES = 10;
+
+  if (order.payment_url && order.payment_url_created_at) {
+    const age = Date.now() - new Date(order.payment_url_created_at).getTime();
+    if (age < REUSE_WINDOW_MINUTES * 60_000) {
+      return Response.redirect(order.payment_url, 302);
+    }
+  }
 
   // Resume with the method the customer originally chose. Sending a Stripe
   // order to DOKU would charge them through a gateway they never picked, and
@@ -258,6 +274,7 @@ export async function GET(
       .from("orders")
       .update({
         payment_url: checkoutUrl,
+        payment_url_created_at: new Date().toISOString(),
         ...(reference ? { payment_reference: reference } : {}),
       })
       .eq("id", order.id);
