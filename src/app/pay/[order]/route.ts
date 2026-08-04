@@ -131,12 +131,74 @@ async function createStripeCheckout(
   return session.url;
 }
 
+/**
+ * Link-preview crawlers, which must never create a checkout.
+ *
+ * WhatsApp fetches every link it sends to build a preview card. Because this
+ * route mints a fresh DOKU checkout on each request, one reminder produced a
+ * real pending transaction at DOKU the instant the message was sent — three of
+ * them appeared within a second of the reminders going out, inflating DOKU's
+ * pending figures with payments no customer had opened.
+ *
+ * Crawlers get a plain page instead. A real browser is unaffected.
+ */
+/** Tokens that only ever appear in a crawler, never in a real browser. */
+const CRAWLER_TOKENS = [
+  "facebookexternalhit",
+  "facebot",
+  "twitterbot",
+  "telegrambot",
+  "slackbot",
+  "linkedinbot",
+  "discordbot",
+  "googlebot",
+  "bingbot",
+  "applebot",
+  "embedly",
+  "quora link preview",
+  "skypeuripreview",
+  "vkshare",
+  "bot/",
+];
+
+/**
+ * "whatsapp" needs care: it identifies the crawler ("WhatsApp/2.xx"), but can
+ * also appear in the in-app browser of a real customer. Treating that customer
+ * as a crawler would leave them unable to pay at all — far worse than a stray
+ * pending transaction — so it only counts as a bot when the agent isn't a
+ * browser. Every real browser sends "Mozilla/5.0"; the crawler does not.
+ */
+function isPreviewBot(request: Request): boolean {
+  const agent = (request.headers.get("user-agent") || "").toLowerCase();
+  if (!agent) return false;
+
+  if (CRAWLER_TOKENS.some((token) => agent.includes(token))) return true;
+
+  const looksLikeBrowser = agent.includes("mozilla/");
+  return !looksLikeBrowser && agent.includes("whatsapp");
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ order: string }> },
 ) {
   const { order: orderParam } = await params;
   const orderNumber = String(orderParam || "").trim().toUpperCase();
+
+  // Answer previews with a card's worth of HTML and nothing else. No order is
+  // read and no checkout is created, so a message being sent cannot register a
+  // payment attempt.
+  if (isPreviewBot(request)) {
+    return new Response(
+      `<!doctype html><html><head>` +
+        `<meta charset="utf-8">` +
+        `<title>Complete your Dr.Smells payment</title>` +
+        `<meta property="og:title" content="Complete your Dr.Smells payment">` +
+        `<meta property="og:description" content="Tap to finish paying for your order.">` +
+        `</head><body>Open this link to complete your payment.</body></html>`,
+      { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
+  }
 
   const origin =
     process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
