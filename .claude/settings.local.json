@@ -145,7 +145,14 @@
       "Bash(grep -iv \"^$\")",
       "Bash(node --env-file=.env.local -e ' *)",
       "Bash(node --input-type=module --check)",
-      "Bash(awk 'NR>=180 && NR<=310 && \\(/has_subscription && subscriptionItems/ || /duration:/ || /mode: \"subscription\"/ || /mode: \"payment\"/ || /} else {/\\)' src/app/api/checkout/route.ts)"
+      "Bash(awk 'NR>=180 && NR<=310 && \\(/has_subscription && subscriptionItems/ || /duration:/ || /mode: \"subscription\"/ || /mode: \"payment\"/ || /} else {/\\)' src/app/api/checkout/route.ts)",
+      "Bash(awk -F, 'NR>1 && NF>5 {q+=$8; n+=$10; c+=$12} END {printf \"independent check -> qty=%d net_sales=%.2f consignment=%.2f\\\\n\", q, n, c}' \"b2b watson sales order.csv\")",
+      "Bash(awk -F, 'NR>1 && NF>5 {print $4}' \"b2b watson sales order.csv\")",
+      "Bash(npx --yes esbuild components/WatsonsInventory.js --outfile=/dev/null)",
+      "Bash(npx --yes esbuild components/WatsonsInventory.js --loader:.js=jsx --outfile=/dev/null)",
+      "Bash(npx --yes esbuild components/WatsonsInventory.js components/WatsonsSalesImport.js pages/dashboard/orders.js --loader:.js=jsx --outdir=/tmp/wscheck)",
+      "Bash(npx --yes esbuild components/WatsonsSalesImport.js components/WatsonsInventory.js --loader:.js=jsx --outdir=/tmp/wscheck2)",
+      "Bash(npx --yes esbuild components/WatsonsSalesImport.js --loader:.js=jsx --outfile=/dev/null)"
     ]
   }
 }

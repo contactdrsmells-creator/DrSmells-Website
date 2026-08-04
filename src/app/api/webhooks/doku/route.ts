@@ -52,13 +52,26 @@ export async function POST(request: Request) {
         })
         .eq("order_number", invoiceNumber);
     } else if (paymentStatus === "FAILED" || paymentStatus === "EXPIRED") {
+      // Status goes back to pending, not left wherever it was.
+      //
+      // DOKU sends PENDING while the customer is on the bank's page, which set
+      // the order to "processing". A later FAILED only changed payment_status,
+      // so the order still read as being fulfilled while no money had arrived —
+      // and since unpaid-order reminders only look at "pending", the customer
+      // never got asked to try again. A failed payment must land back where an
+      // abandoned one does.
+      //
+      // Guarded so a late FAILED from an earlier attempt cannot undo a payment
+      // that has since succeeded.
       await supabase
         .from("orders")
         .update({
+          status: "pending",
           payment_status: "failed",
           updated_at: new Date().toISOString(),
         })
-        .eq("order_number", invoiceNumber);
+        .eq("order_number", invoiceNumber)
+        .neq("payment_status", "paid");
     }
 
     return Response.json({ success: true });
