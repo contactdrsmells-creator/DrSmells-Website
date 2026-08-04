@@ -1,0 +1,36 @@
+name: Payment status re-check
+
+# Catches payments whose DOKU notification never arrived. Order 120WWV was
+# approved on card at DOKU and the callback never reached the site, so it sat
+# pending and was never packed until someone noticed it by hand.
+#
+# The endpoint decides which orders are actually due — checks widen from 1 hour
+# to 46 hours after the order and stop after seven — so running hourly is safe
+# and does nothing when nothing is due.
+on:
+  schedule:
+    - cron: "30 * * * *" # hourly, at half past (UTC)
+  workflow_dispatch: {} # allows a manual run from the Actions tab
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger payment status check
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "https://drsmells-website.vercel.app/api/cron/payment-status-check")
+
+          body=$(echo "$response" | sed '$d')
+          code=$(echo "$response" | tail -n1)
+
+          echo "HTTP $code"
+          echo "$body"
+
+          # Fail the run on a non-2xx so a broken secret or outage is visible in
+          # the Actions tab rather than silently recovering nothing for weeks.
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "Payment status check failed"
+            exit 1
+          fi
