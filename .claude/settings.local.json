@@ -152,7 +152,17 @@
       "Bash(npx --yes esbuild components/WatsonsInventory.js --loader:.js=jsx --outfile=/dev/null)",
       "Bash(npx --yes esbuild components/WatsonsInventory.js components/WatsonsSalesImport.js pages/dashboard/orders.js --loader:.js=jsx --outdir=/tmp/wscheck)",
       "Bash(npx --yes esbuild components/WatsonsSalesImport.js components/WatsonsInventory.js --loader:.js=jsx --outdir=/tmp/wscheck2)",
-      "Bash(npx --yes esbuild components/WatsonsSalesImport.js --loader:.js=jsx --outfile=/dev/null)"
+      "Bash(npx --yes esbuild components/WatsonsSalesImport.js --loader:.js=jsx --outfile=/dev/null)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl available'\\)\")",
+      "Bash(rm -rf xl)",
+      "Bash(unzip -o -q \"/Users/kai/Desktop/Order.toship.20260804_20260804.xlsx\" -d shopee_x)",
+      "Bash(sed -e \"/^import { adminSupabase }/d\" -e \"/^import { deductInventory }/d\" -e \"s#from './xlsx'#from '/Users/kai/Desktop/DrSmells-CRM/lib/xlsx.js'#\" /Users/kai/Desktop/DrSmells-CRM/lib/shopee-sales.js)",
+      "Bash(node shopee_test.mjs)",
+      "Bash(node recheck.mjs)",
+      "Bash(node decisive.mjs)",
+      "Bash(npx --yes esbuild components/ShopeeSalesImport.js pages/dashboard/orders.js --loader:.js=jsx --outdir=/tmp/chk3)"
     ]
   }
 }
