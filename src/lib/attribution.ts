@@ -19,6 +19,8 @@ export interface Attribution {
   campaign?: string;
   landing_page?: string;
   captured_at: number;
+  /** Meta's ad click id, kept so the Conversions API can match the sale to the ad. */
+  fbclid?: string;
 }
 
 /** Referrers worth naming; anything else falls back to its hostname. */
@@ -81,6 +83,7 @@ export function captureAttribution(): void {
       campaign: params.get("utm_campaign") || undefined,
       landing_page: window.location.pathname,
       captured_at: Date.now(),
+      fbclid: params.get("fbclid") || existing?.fbclid,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(attribution));
@@ -111,4 +114,37 @@ export function readAttribution(): Attribution | null {
 /** The value stored on the order's `source` column. */
 export function getOrderSource(): string {
   return readAttribution()?.source || "Direct";
+}
+
+function readCookie(name: string): string | undefined {
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+/**
+ * The click identifiers Meta needs to attribute a sale to an ad.
+ *
+ * Sent to the server at checkout and stored on the order, because a payment
+ * webhook fires long after — sometimes days later, when a WhatsApp reminder
+ * finally gets paid — and by then nothing about the original click is
+ * reachable.
+ *
+ * _fbc and _fbp are set by the pixel. When the pixel is blocked, _fbc is
+ * rebuilt from the fbclid recorded on arrival, in Meta's documented
+ * `fb.1.<timestamp>.<fbclid>` form, so an ad click still reports even to
+ * someone running an ad blocker.
+ */
+export function getMetaTrackingData(): { fbc?: string; fbp?: string } {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const stored = readAttribution();
+    const fbc =
+      readCookie("_fbc") ||
+      (stored?.fbclid ? `fb.1.${stored.captured_at}.${stored.fbclid}` : undefined);
+
+    return { fbc, fbp: readCookie("_fbp") };
+  } catch {
+    return {};
+  }
 }

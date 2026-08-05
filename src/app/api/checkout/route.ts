@@ -38,10 +38,52 @@ async function generateOrderNumber(): Promise<string> {
   return `DS-${datePart}-${rand}`;
 }
 
+/** Meta's click ids are opaque strings; cap them rather than storing anything sent. */
+function safeClickId(value: unknown): string | undefined {
+  const v = typeof value === "string" ? value.trim() : "";
+  return v && v.length <= 255 ? v : undefined;
+}
+
+/**
+ * Records what Meta needs to attribute this sale, while the customer is still
+ * here to be recorded. A payment webhook arrives from DOKU's server — reading
+ * the IP or user agent there would describe a gateway, not a shopper.
+ */
+async function storeMetaAttribution(
+  supabase: ReturnType<typeof getSupabase>,
+  orderNumber: string,
+  meta: unknown,
+  request: Request,
+): Promise<void> {
+  const clickIds = (meta ?? {}) as { fbc?: unknown; fbp?: unknown };
+
+  // Vercel puts the client first in x-forwarded-for; later entries are proxies.
+  const forwarded = request.headers.get("x-forwarded-for") || "";
+  const clientIp = forwarded.split(",")[0].trim() || request.headers.get("x-real-ip") || undefined;
+  const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "https://drsmells.com.my";
+
+  const attribution = {
+    fbc: safeClickId(clickIds.fbc),
+    fbp: safeClickId(clickIds.fbp),
+    client_ip_address: clientIp,
+    client_user_agent: request.headers.get("user-agent") || undefined,
+    event_source_url: `${origin}/checkout`,
+  };
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ meta_attribution: attribution })
+    .eq("order_number", orderNumber);
+
+  if (error) {
+    console.error(`[MetaCAPI] Could not store attribution for ${orderNumber}:`, error.message);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription, voucher_free_shipping } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription, voucher_free_shipping, meta } = body;
 
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
@@ -168,6 +210,12 @@ export async function POST(request: Request) {
       console.error("Order creation error:", orderError);
       return Response.json({ error: "Failed to create order" }, { status: 500 });
     }
+
+    // Stored as a separate best-effort write, never as part of the insert
+    // above: Postgres rejects the whole statement if the column is missing, so
+    // folding this in would mean an unrun migration silently stopped customers
+    // from ordering at all.
+    await storeMetaAttribution(supabase, orderNumber, meta, request);
 
     // Generate payment redirect URL
     let redirect_url = "";

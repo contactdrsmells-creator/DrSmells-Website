@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { reportPurchaseToMeta } from "@/lib/meta-capi";
 
 /**
  * Marks an order paid, and never lets an optional field take the core fields
@@ -11,6 +12,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * The essential fields are applied first on their own; the extras are a second,
  * best-effort write.
+ *
+ * This is also where the sale is reported to Meta. Putting it here rather than
+ * at each call site is deliberate: a payment path that forgets to report is
+ * invisible — the money arrives, the order ships, and only Ads Manager quietly
+ * disagrees. Any future way of marking an order paid gets reporting for free.
  */
 export async function markOrderPaid(
   supabase: SupabaseClient,
@@ -29,19 +35,27 @@ export async function markOrderPaid(
   }
 
   const extras = Object.entries(optional).filter(([, v]) => v !== undefined && v !== null);
-  if (!extras.length) return;
 
-  const { error: optionalError } = await supabase
-    .from("orders")
-    .update(Object.fromEntries(extras))
-    .eq("order_number", orderNumber);
+  if (extras.length) {
+    const { error: optionalError } = await supabase
+      .from("orders")
+      .update(Object.fromEntries(extras))
+      .eq("order_number", orderNumber);
 
-  // Logged, not thrown: the payment is already recorded, and a missing
-  // reference column must not make the webhook look like it failed.
-  if (optionalError) {
-    console.error(
-      `[Order] ${orderNumber} marked paid, but optional fields (${extras.map(([k]) => k).join(", ")}) failed:`,
-      optionalError.message,
-    );
+    // Logged, not thrown: the payment is already recorded, and a missing
+    // reference column must not make the webhook look like it failed.
+    if (optionalError) {
+      console.error(
+        `[Order] ${orderNumber} marked paid, but optional fields (${extras.map(([k]) => k).join(", ")}) failed:`,
+        optionalError.message,
+      );
+    }
   }
+
+  // Reporting is caught rather than awaited into the caller's error path — an
+  // ad platform being unreachable must never fail a payment webhook, which
+  // would leave the gateway retrying a payment that is already recorded.
+  await reportPurchaseToMeta(supabase, orderNumber).catch((err: Error) =>
+    console.error(`[MetaCAPI] Unexpected error reporting ${orderNumber}:`, err.message),
+  );
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { syncOrderToCRM } from "@/lib/crm-sync";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { markOrderPaid } from "@/lib/mark-order-paid";
 
 function getSupabase() {
   return createClient(
@@ -26,15 +27,20 @@ export async function POST(request: Request) {
     const supabase = getSupabase();
 
     if (paymentStatus === "SUCCESS" || paymentStatus === "COMPLETED") {
-      await supabase
-        .from("orders")
-        .update({
+      // Goes through markOrderPaid rather than updating directly so this path
+      // gets the same treatment as the others — in particular reporting the
+      // sale to Meta, which is the only chance most DOKU payments get: the
+      // customer is usually still in a banking app, so no browser event fires.
+      await markOrderPaid(
+        supabase,
+        invoiceNumber,
+        {
           status: "paid",
           payment_status: "paid",
-          payment_reference: transactionId,
           updated_at: new Date().toISOString(),
-        })
-        .eq("order_number", invoiceNumber);
+        },
+        { payment_reference: transactionId },
+      );
 
       // Sync paid order to CRM
       await syncOrderToCRM(invoiceNumber).catch((err) =>

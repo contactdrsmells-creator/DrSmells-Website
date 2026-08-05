@@ -8,7 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 import { resolveUnitPrice } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/components/MetaPixel";
-import { getOrderSource } from "@/lib/attribution";
+import { getOrderSource, getMetaTrackingData } from "@/lib/attribution";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -206,6 +206,10 @@ export default function CheckoutPage() {
           // directly recorded everything as "Direct", because the campaign
           // parameters are on the landing page and gone by this point.
           source: getOrderSource(),
+          // Meta's click identifiers, stored on the order so the Conversions
+          // API can attribute the sale whenever payment actually confirms —
+          // which for FPX is often after this browser has closed.
+          meta: getMetaTrackingData(),
         }),
       });
 
