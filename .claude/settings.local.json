@@ -162,7 +162,16 @@
       "Bash(node shopee_test.mjs)",
       "Bash(node recheck.mjs)",
       "Bash(node decisive.mjs)",
-      "Bash(npx --yes esbuild components/ShopeeSalesImport.js pages/dashboard/orders.js --loader:.js=jsx --outdir=/tmp/chk3)"
+      "Bash(npx --yes esbuild components/ShopeeSalesImport.js pages/dashboard/orders.js --loader:.js=jsx --outdir=/tmp/chk3)",
+      "Bash(cd /Users/kai/Desktop/DrSmells-CRM && cat supabase-channels.sql && echo \"=== DROP CHECK ===\" && cat supabase-drop-channel-check.sql)",
+      "Bash(cd /Users/kai/Desktop/DrSmells-CRM && grep -rn \"channel\" --include=*.js --include=*.jsx --include=*.ts --include=*.tsx -l . 2>/dev/null | grep -v node_modules | head -30)",
+      "Bash(grep -n \"setModal\\('create'\\)\\\\|setForm\\(EMPTY\\)\\\\|setForm\\({...EMPTY\" pages/dashboard/orders.js)",
+      "Bash(sed \"s|^import { adminSupabase }.*|const adminSupabase = \\(\\) => { throw new Error\\('db'\\) }|; s|^import { deductInventory }.*|const deductInventory = \\(\\) => {}|\" /Users/kai/Desktop/DrSmells-CRM/lib/tiktok-sales.js)",
+      "Bash(node run.mjs)",
+      "Bash(node multi.mjs)",
+      "Bash(node catalogue.mjs)",
+      "Bash(sed -i '' \"s|from './lazada-pure.mjs'|from './lazada-json.mjs'|\" laz-multi.mjs)",
+      "Bash(node laz-multi.mjs)"
     ]
   }
 }

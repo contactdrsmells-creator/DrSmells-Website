@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ImageProtection from "@/components/ImageProtection";
 import MetaPixel from "@/components/MetaPixel";
+import FloatingWhatsApp from "@/components/FloatingWhatsApp";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +31,7 @@ export default function RootLayout({
         <ImageProtection />
         <Navbar />
         <main className="flex-1">{children}</main>
+        <FloatingWhatsApp />
         <Footer />
       </body>
     </html>

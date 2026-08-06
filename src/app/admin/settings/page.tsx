@@ -9,12 +9,28 @@ interface Settings {
   brand: { name: string; tagline: string; mission: string; company: string };
   contact: { email: string; phone: string; whatsapp: string; address: string };
   social: { facebook: string; instagram: string; tiktok: string; whatsapp: string };
+  // Header promo pill and the floating WhatsApp button. Stored as strings
+  // because every other section is, and the storefront normalises them.
+  promo: {
+    enabled: string;
+    label: string;
+    href: string;
+    whatsapp_enabled: string;
+    whatsapp_url: string;
+  };
 }
 
 const defaultSettings: Settings = {
   brand: { name: "Dr.Smells", tagline: "Simple . Effective . 100hrs", mission: "Your skin, our mission - smell like you", company: "LIFE BIO LAB SDN. BHD (1452572-P)" },
   contact: { email: "info@drsmells.com.my", phone: "", whatsapp: "", address: "" },
   social: { facebook: "", instagram: "", tiktok: "", whatsapp: "" },
+  promo: {
+    enabled: "false",
+    label: "HOT PROMO",
+    href: "/shop?category=promo",
+    whatsapp_enabled: "true",
+    whatsapp_url: "",
+  },
 };
 
 export default function AdminSettings() {
@@ -98,6 +114,67 @@ export default function AdminSettings() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
               <input type="text" value={settings.brand.company} onChange={(e) => updateField("brand", "company", e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+            </div>
+          </div>
+        </div>
+
+        {/* Promo button & floating WhatsApp */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">Promo Button &amp; WhatsApp</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            The pill in the site header, and the floating WhatsApp button at the bottom right.
+          </p>
+
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={settings.promo.enabled === "true"}
+                onChange={(e) => updateField("promo", "enabled", e.target.checked ? "true" : "false")}
+              />
+              Show the promo button in the header
+            </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Button text</label>
+                <input type="text" value={settings.promo.label}
+                  onChange={(e) => updateField("promo", "label", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Links to</label>
+                <input type="text" value={settings.promo.href}
+                  onChange={(e) => updateField("promo", "href", e.target.value)}
+                  placeholder="/shop?category=promo"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+                <p className="text-xs text-gray-500 mt-1">
+                  A category page, e.g. <code>/shop?category=promo</code>. Tag the products you want
+                  shown with that category under Products.
+                </p>
+              </div>
+            </div>
+
+            <hr className="border-gray-100" />
+
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={settings.promo.whatsapp_enabled === "true"}
+                onChange={(e) => updateField("promo", "whatsapp_enabled", e.target.checked ? "true" : "false")}
+              />
+              Show the floating WhatsApp button
+            </label>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp link</label>
+              <input type="text" value={settings.promo.whatsapp_url}
+                onChange={(e) => updateField("promo", "whatsapp_url", e.target.value)}
+                placeholder="https://wa.me/60123456789"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+              <p className="text-xs text-gray-500 mt-1">
+                Leave blank to use the WhatsApp link from Social Media below.
+              </p>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ShoppingBag, Menu, X, ChevronDown, User } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
+import PromoButton from "./PromoButton";
 import Cart from "./Cart";
 
 export default function Navbar() {
@@ -112,7 +113,11 @@ export default function Navbar() {
             </nav>
 
             {/* Right side icons */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 md:gap-4">
+              {/* Left of the account icon on desktop. The account icon is
+                  hidden on mobile, so this lands left of the cart there. */}
+              <PromoButton />
+
               <Link
                 href="/account"
                 className="hidden md:flex text-olive/60 hover:text-olive transition-colors"

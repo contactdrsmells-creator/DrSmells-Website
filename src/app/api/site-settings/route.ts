@@ -17,7 +17,7 @@ export async function GET() {
     // This endpoint is public and unauthenticated, so it returns an explicit
     // allow-list rather than every row. Settings holding credentials (e.g. the
     // WhatsApp automation webhook key) must never be served here.
-    const PUBLIC_KEYS = ["brand", "contact", "social", "site_images", "shipping"];
+    const PUBLIC_KEYS = ["brand", "contact", "social", "site_images", "shipping", "promo"];
 
     const settings: Record<string, Record<string, string>> = {};
     data?.forEach((row: { key: string; value: Record<string, string> }) => {
