@@ -157,7 +157,7 @@ export default function SearchBox() {
               >
                 {/* Plain img, as ProductCard uses: next/image would need every
                     storage host allowlisted in next.config, and none are. */}
-                <div className="w-11 h-11 rounded-lg bg-sage-light/60 shrink-0 overflow-hidden">
+                <div className="w-11 h-11 rounded-lg bg-white shrink-0 overflow-hidden">
                   {product.image_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
