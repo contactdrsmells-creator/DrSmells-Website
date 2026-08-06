@@ -12,6 +12,14 @@ import ValueProps from "@/components/ValueProps";
 import SafeHTML from "@/components/SafeHTML";
 import ReviewSection from "@/components/ReviewSection";
 
+/**
+ * Adding to the cart loops once per unit, so an unbounded quantity would run
+ * that many store updates and lock the tab. Typing one is now possible, and the
+ * + button never had a ceiling either.
+ */
+const MAX_QUANTITY = 99;
+const clampQty = (n: number) => Math.min(MAX_QUANTITY, Math.max(1, n));
+
 // Accordion component
 function Accordion({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -38,6 +46,9 @@ export default function ProductPage() {
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
+  // The box is allowed to sit empty while it is being retyped, so its text is
+  // held separately from the number the rest of the page prices off.
+  const [quantityText, setQuantityText] = useState("1");
   const [activeImage, setActiveImage] = useState(0);
   const [purchaseType, setPurchaseType] = useState<"onetime" | "subscribe">("onetime");
   const [selectedInterval, setSelectedInterval] = useState<number>(1);
@@ -82,6 +93,7 @@ export default function ProductPage() {
     load();
     setActiveImage(0);
     setQuantity(1);
+    setQuantityText("1");
   }, [slug]);
 
   if (!product) {
@@ -165,6 +177,14 @@ export default function ProductPage() {
       addItem(product, cartLabel, subscription);
     }
     setQuantity(1);
+    setQuantityText("1");
+  };
+
+  /** Keeps the number and the text in the box in step, within bounds. */
+  const setQty = (n: number) => {
+    const next = clampQty(Number.isFinite(n) ? n : 1);
+    setQuantity(next);
+    setQuantityText(String(next));
   };
   const allImages = product.images?.length > 0 ? product.images : (product.image_url ? [product.image_url] : []);
 
@@ -372,9 +392,27 @@ export default function ProductPage() {
               <div>
                 <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Quantity</p>
                 <div className="inline-flex items-center border border-olive/20 rounded-full">
-                  <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-l-full text-olive"><Minus className="w-4 h-4" /></button>
-                  <span className="w-10 text-center text-sm font-semibold text-olive">{quantity}</span>
-                  <button onClick={() => setQuantity(quantity + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-r-full text-olive"><Plus className="w-4 h-4" /></button>
+                  <button onClick={() => setQty(quantity - 1)} aria-label="Decrease quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-l-full text-olive"><Minus className="w-4 h-4" /></button>
+                  {/* text + inputMode rather than type="number": the spinner
+                      arrows duplicate the buttons either side, and a stray
+                      scroll over a number field silently changes the order. */}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="Quantity"
+                    value={quantityText}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      setQuantityText(digits);
+                      // An empty box leaves the previous number in place, so the
+                      // Add to Cart total doesn't flash RM 0.00 mid-edit.
+                      if (digits) setQuantity(clampQty(parseInt(digits, 10)));
+                    }}
+                    onBlur={() => setQty(parseInt(quantityText, 10) || 1)}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                    className="w-10 text-center text-sm font-semibold text-olive bg-transparent outline-none"
+                  />
+                  <button onClick={() => setQty(quantity + 1)} aria-label="Increase quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-r-full text-olive"><Plus className="w-4 h-4" /></button>
                 </div>
               </div>
 
