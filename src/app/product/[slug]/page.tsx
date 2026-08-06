@@ -68,7 +68,9 @@ export default function ProductPage() {
         if (productRes.data.sizes?.length) setSelectedSize(productRes.data.sizes[0]);
         // Use manually selected related products, fallback to other products
         const relatedIds = productRes.data.related_products || [];
-        const allProds = (allProductsRes.data || []) as Product[];
+        // A hidden product is not shown here either. Its own page still works —
+        // this only stops it being surfaced from somewhere else on the site.
+        const allProds = ((allProductsRes.data || []) as Product[]).filter((p) => p.hidden !== true);
         if (relatedIds.length > 0) {
           setRelatedProducts(allProds.filter((p) => relatedIds.includes(p.id)));
         } else {

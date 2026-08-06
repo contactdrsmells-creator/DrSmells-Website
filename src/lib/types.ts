@@ -63,6 +63,12 @@ export interface Product {
   subscription_options?: SubscriptionOption[];
   in_stock: boolean;
   featured: boolean;
+  /**
+   * Kept out of every browsable listing — shop, categories, the home page and
+   * related products — while staying reachable by search and by its own link.
+   * For products that should be buyable but not on display.
+   */
+  hidden?: boolean;
   sort_order: number;
   page_sections: ProductPageSections;
 }

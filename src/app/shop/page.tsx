@@ -51,7 +51,11 @@ function ShopContent() {
       }
 
       const { data } = await supabase.from("products").select("*").order("sort_order");
-      let items = (data as Product[]) || [];
+      // Hidden products are left out of All Products and of every category —
+      // they are meant to be reachable by search and by their own link only.
+      // "not true" rather than "is false", so a row predating the column still
+      // shows.
+      let items = ((data as Product[]) || []).filter((p) => p.hidden !== true);
       if (activeCategory) {
         items = items.filter((p) => (p.categories || []).includes(activeCategory));
       }

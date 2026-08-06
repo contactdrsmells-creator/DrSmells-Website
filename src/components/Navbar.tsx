@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ShoppingBag, Menu, X, ChevronDown, User } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import PromoButton from "./PromoButton";
+import SearchBox from "./SearchBox";
 import Cart from "./Cart";
 
 export default function Navbar() {
@@ -117,6 +118,10 @@ export default function Navbar() {
               {/* Left of the account icon on desktop. The account icon is
                   hidden on mobile, so this lands left of the cart there. */}
               <PromoButton />
+
+              {/* Shown on mobile too, unlike the account icon: it is the only
+                  way to reach a hidden product without its link. */}
+              <SearchBox />
 
               <Link
                 href="/account"

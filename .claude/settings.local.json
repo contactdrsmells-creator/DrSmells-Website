@@ -171,7 +171,8 @@
       "Bash(node multi.mjs)",
       "Bash(node catalogue.mjs)",
       "Bash(sed -i '' \"s|from './lazada-pure.mjs'|from './lazada-json.mjs'|\" laz-multi.mjs)",
-      "Bash(node laz-multi.mjs)"
+      "Bash(node laz-multi.mjs)",
+      "Bash(sed -n '60,80p' src/app/product/[slug]/page.tsx; echo \"=== ProductCard price ===\"; grep -n \"price\\\\|sale_price\" src/components/ProductCard.tsx | head -12)"
     ]
   }
 }

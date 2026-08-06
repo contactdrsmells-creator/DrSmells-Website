@@ -11,6 +11,17 @@ const isSupabaseConfigured =
   process.env.NEXT_PUBLIC_SUPABASE_URL !== "your_supabase_url_here" &&
   !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
+/**
+ * Hidden products are left out of every browsable listing. They stay reachable
+ * by search and by their own link — the point is to sell them without putting
+ * them on display.
+ *
+ * Written as "not true" rather than "is false" so a row predating the column,
+ * where it is null, still shows.
+ */
+const visible = <T extends { hidden?: boolean }>(items: T[]) =>
+  items.filter((p) => p.hidden !== true);
+
 export async function getProducts(category?: string): Promise<Product[]> {
   if (!isSupabaseConfigured) {
     if (category) return sampleProducts.filter((p) => p.category === category);
@@ -19,7 +30,7 @@ export async function getProducts(category?: string): Promise<Product[]> {
   let query = supabase.from("products").select("*").order("sort_order");
   if (category) query = query.eq("category", category);
   const { data } = await query;
-  return (data as Product[]) || [];
+  return visible((data as Product[]) || []);
 }
 
 export async function getProduct(slug: string): Promise<Product | null> {
@@ -43,7 +54,7 @@ export async function getFeaturedProducts(): Promise<Product[]> {
     .select("*")
     .eq("featured", true)
     .order("sort_order");
-  return (data as Product[]) || [];
+  return visible((data as Product[]) || []);
 }
 
 export async function getTestimonials(): Promise<Testimonial[]> {

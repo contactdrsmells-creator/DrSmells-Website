@@ -27,7 +27,7 @@ const ALL_CATEGORIES = ["underarm", "mouth", "feet", "bundle"];
 const emptyProduct: Partial<Product> = {
   name: "", slug: "", description: "", short_description: "", price: 0, sale_price: null,
   category: "underarm", categories: [], related_products: [], image_url: "", images: [], sizes: [], variations: [],
-  in_stock: true, featured: false, sort_order: 0, page_sections: {},
+  in_stock: true, featured: false, hidden: false, sort_order: 0, page_sections: {},
 };
 
 export default function AdminProducts() {
@@ -181,6 +181,7 @@ export default function AdminProducts() {
       subscription_enabled: subEnabled,
       subscription_options: subOptions.length > 0 ? subOptions : null,
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
+      hidden: !!editing.hidden,
       page_sections,
     };
 
@@ -304,6 +305,25 @@ export default function AdminProducts() {
                     );
                   })}
                 </div>
+
+                {/* Visibility sits with Category because it is the same
+                    decision: where this product appears. */}
+                <label className="mt-4 flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-olive mt-0.5"
+                    checked={!!editing.hidden}
+                    onChange={(e) => setEditing({ ...editing, hidden: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-700">Hide from shop &amp; categories</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Kept out of All Products, every category, the home page and related
+                      products. Customers can still reach it by searching, or with a direct
+                      link — so it stays buyable without being on display.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               {/* Variations (Size + Price) */}
@@ -878,9 +898,21 @@ export default function AdminProducts() {
                   })()}
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-1 rounded-full ${product.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                    {product.in_stock ? "In Stock" : "Out of Stock"}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className={`text-xs px-2 py-1 rounded-full ${product.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {product.in_stock ? "In Stock" : "Out of Stock"}
+                    </span>
+                    {/* Otherwise a product missing from the shop looks like a
+                        bug rather than a setting. */}
+                    {product.hidden && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800"
+                        title="Search and direct links only — not in the shop, categories, home page or related products"
+                      >
+                        Hidden
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
