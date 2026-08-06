@@ -6,6 +6,7 @@ import { Product } from "@/lib/types";
 import ProductCard from "@/components/ProductCard";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
+import { useSiteWidgets } from "@/lib/site-widgets";
 
 const categories = [
   { key: "", label: "All Products" },
@@ -14,6 +15,13 @@ const categories = [
   { key: "feet", label: "Feet" },
   { key: "bundle", label: "Bundle" },
 ];
+
+/**
+ * The Hot Promo tab is added only while the promo is switched on, and carries
+ * whatever it has been renamed to. A campaign that has ended should leave no
+ * empty tab behind.
+ */
+const PROMO_CATEGORY = "promo";
 
 export default function ShopPage() {
   return (
@@ -29,6 +37,15 @@ function ShopContent() {
   const [activeCategory, setActiveCategory] = useState(categoryParam);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const { promo_enabled, promo_label } = useSiteWidgets();
+
+  // The promo tab is offered only while the promo is running, and carries
+  // whatever it has been renamed to. It still appears when someone arrives on
+  // the promo URL directly, so the tab they are on is never the unlit one.
+  const shownCategories =
+    promo_enabled || activeCategory === PROMO_CATEGORY
+      ? [...categories, { key: PROMO_CATEGORY, label: promo_label }]
+      : categories;
 
   useEffect(() => {
     setActiveCategory(categoryParam);
@@ -76,7 +93,7 @@ function ShopContent() {
 
       {/* Category Filters */}
       <div className="flex flex-wrap gap-2 mb-10">
-        {categories.map((cat) => (
+        {shownCategories.map((cat) => (
           <button
             key={cat.key}
             onClick={() => setActiveCategory(cat.key)}

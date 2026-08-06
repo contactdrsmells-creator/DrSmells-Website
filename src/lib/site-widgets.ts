@@ -51,16 +51,38 @@ export function toWidgets(
   };
 }
 
+/** Bump if the shape changes, so a stale cache is discarded rather than read. */
+const CACHE_KEY = "site_widgets_v1";
+
 export function useSiteWidgets(): SiteWidgets {
   const [widgets, setWidgets] = useState<SiteWidgets>(WIDGET_DEFAULTS);
 
   useEffect(() => {
     let cancelled = false;
 
+    // Paint from the last known settings before the request returns. The promo
+    // defaults to off, so until this arrived the Shop menu drew without its
+    // promo row and then grew one — moving the item under the cursor after the
+    // menu was already open. Read here rather than during render, so the server
+    // and client markup still agree.
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) setWidgets({ ...WIDGET_DEFAULTS, ...JSON.parse(cached) });
+    } catch {
+      // Private browsing can block storage; the fetch below still works.
+    }
+
     fetch("/api/site-settings")
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setWidgets(toWidgets(data?.promo, data?.social));
+        if (cancelled) return;
+        const next = toWidgets(data?.promo, data?.social);
+        setWidgets(next);
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+        } catch {
+          // Not being able to remember is only a slower next visit.
+        }
       })
       .catch(() => {
         // Settings unreachable: keep the defaults rather than breaking the page.

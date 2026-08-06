@@ -24,7 +24,15 @@ export async function GET() {
       if (PUBLIC_KEYS.includes(row.key)) settings[row.key] = row.value;
     });
 
-    return Response.json(settings);
+    // Every page load asks for this before it can draw the promo menu item and
+    // the WhatsApp button, and an uncached Supabase round trip on a cold
+    // function took long enough for both to appear seconds late. Settings
+    // change rarely, so a short shared cache is safe; stale-while-revalidate
+    // means an edit is picked up in the background rather than making the next
+    // visitor wait for it.
+    return Response.json(settings, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600" },
+    });
   } catch {
     return Response.json({
       brand: { name: "Dr.Smells", tagline: "Simple . Effective . 100hrs", mission: "Your skin, our mission - smell like you", company: "LIFE BIO LAB SDN. BHD (1452572-P)" },

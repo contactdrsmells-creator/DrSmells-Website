@@ -24,6 +24,16 @@ function Panel({ title, children, defaultOpen = false }: { title: string; childr
 
 const ALL_CATEGORIES = ["underarm", "mouth", "feet", "bundle"];
 
+/**
+ * Not a product type but a merchandising tag, so it is ticked separately from
+ * the four above and kept last in `categories` — otherwise ticking it first
+ * would make "promo" the product's primary category.
+ *
+ * The Hot Promo menu item points at /shop?category=promo, so this tick is what
+ * decides which products that page shows.
+ */
+const PROMO_CATEGORY = "promo";
+
 const emptyProduct: Partial<Product> = {
   name: "", slug: "", description: "", short_description: "", price: 0, sale_price: null,
   category: "underarm", categories: [], related_products: [], image_url: "", images: [], sizes: [], variations: [],
@@ -305,6 +315,41 @@ export default function AdminProducts() {
                     );
                   })}
                 </div>
+
+                {/* Kept apart from the four above: it is a campaign tag, not a
+                    product type, and it is what fills the Hot Promo page. */}
+                {(() => {
+                  const cats = editing.categories || [];
+                  const inPromo = cats.includes(PROMO_CATEGORY);
+                  return (
+                    <label className="mt-4 flex items-start gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="accent-olive mt-0.5"
+                        checked={inPromo}
+                        onChange={() => {
+                          const without = cats.filter((c) => c !== PROMO_CATEGORY);
+                          // Appended, never prepended, so the primary category
+                          // stays a real product type.
+                          const updated = inPromo ? without : [...without, PROMO_CATEGORY];
+                          setEditing({
+                            ...editing,
+                            categories: updated,
+                            category: without[0] || updated[0] || "",
+                          });
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium text-gray-700">Show in Hot Promo 🔥</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          Adds it to the Hot Promo page linked from the Shop menu. The menu
+                          item itself is turned on, renamed and pointed elsewhere under Site
+                          Settings.
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })()}
 
                 {/* Visibility sits with Category because it is the same
                     decision: where this product appears. */}
