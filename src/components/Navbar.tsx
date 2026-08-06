@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ShoppingBag, Menu, X, ChevronDown, User } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
-import PromoButton from "./PromoButton";
+import PromoMenuItem from "./PromoMenuItem";
 import SearchBox from "./SearchBox";
 import Cart from "./Cart";
 
@@ -71,6 +71,7 @@ export default function Navbar() {
                           {cat.name}
                         </Link>
                       ))}
+                      <PromoMenuItem variant="dropdown" onClick={closeDropdowns} />
                     </div>
                   </div>
                 )}
@@ -115,10 +116,6 @@ export default function Navbar() {
 
             {/* Right side icons */}
             <div className="flex items-center gap-3 md:gap-4">
-              {/* Left of the account icon on desktop. The account icon is
-                  hidden on mobile, so this lands left of the cart there. */}
-              <PromoButton />
-
               {/* Shown on mobile too, unlike the account icon: it is the only
                   way to reach a hidden product without its link. */}
               <SearchBox />
@@ -167,6 +164,7 @@ export default function Navbar() {
                   {cat.name}
                 </Link>
               ))}
+              <PromoMenuItem variant="mobile" onClick={() => setMobileOpen(false)} />
               <hr className="border-olive/10" />
               <p className="text-xs font-semibold text-olive/40 uppercase">About</p>
               {aboutLinks.map((link) => (
