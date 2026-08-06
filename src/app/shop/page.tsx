@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Product } from "@/lib/types";
 import ProductCard from "@/components/ProductCard";
 import { sampleProducts } from "@/lib/sample-data";
@@ -33,11 +33,27 @@ export default function ShopPage() {
 
 function ShopContent() {
   const searchParams = useSearchParams();
-  const categoryParam = searchParams.get("category") || "";
-  const [activeCategory, setActiveCategory] = useState(categoryParam);
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const { promo_enabled, promo_label } = useSiteWidgets();
+
+  /**
+   * The address bar is the only record of which category is showing.
+   *
+   * The tabs used to set React state and leave the URL alone, so the two could
+   * disagree — and then a Shop menu link pointing at the URL you were already
+   * on performed no navigation, leaving the old tab selected. Picking Hot Promo
+   * and then All Products kept you on the promo.
+   *
+   * Deriving it from the URL also makes the back button work and a filtered
+   * shop worth sharing.
+   */
+  const activeCategory = searchParams.get("category") || "";
+
+  const selectCategory = (key: string) => {
+    router.push(key ? `/shop?category=${encodeURIComponent(key)}` : "/shop", { scroll: false });
+  };
 
   // The promo tab is offered only while the promo is running, and carries
   // whatever it has been renamed to. It still appears when someone arrives on
@@ -46,10 +62,6 @@ function ShopContent() {
     promo_enabled || activeCategory === PROMO_CATEGORY
       ? [...categories, { key: PROMO_CATEGORY, label: promo_label }]
       : categories;
-
-  useEffect(() => {
-    setActiveCategory(categoryParam);
-  }, [categoryParam]);
 
   useEffect(() => {
     async function load() {
@@ -96,7 +108,7 @@ function ShopContent() {
         {shownCategories.map((cat) => (
           <button
             key={cat.key}
-            onClick={() => setActiveCategory(cat.key)}
+            onClick={() => selectCategory(cat.key)}
             className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ${
               activeCategory === cat.key
                 ? "bg-olive text-cream"
