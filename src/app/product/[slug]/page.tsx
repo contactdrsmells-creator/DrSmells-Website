@@ -13,11 +13,12 @@ import SafeHTML from "@/components/SafeHTML";
 import ReviewSection from "@/components/ReviewSection";
 
 /**
- * Adding to the cart loops once per unit, so an unbounded quantity would run
- * that many store updates and lock the tab. Typing one is now possible, and the
- * + button never had a ceiling either.
+ * High enough for the RM1 item, where the quantity IS the price and a customer
+ * may legitimately need hundreds. The cart takes the whole amount in one write,
+ * so a large number costs nothing; this only stops a pasted number of absurd
+ * length reaching the order.
  */
-const MAX_QUANTITY = 99;
+const MAX_QUANTITY = 9999;
 const clampQty = (n: number) => Math.min(MAX_QUANTITY, Math.max(1, n));
 
 // Accordion component
@@ -173,9 +174,7 @@ export default function ProductPage() {
     const subscription = purchaseType === "subscribe" && subEnabled
       ? { interval_months: selectedInterval, price: subPrice }
       : null;
-    for (let i = 0; i < quantity; i++) {
-      addItem(product, cartLabel, subscription);
-    }
+    addItem(product, cartLabel, subscription, quantity);
     setQuantity(1);
     setQuantityText("1");
   };
@@ -410,7 +409,7 @@ export default function ProductPage() {
                     }}
                     onBlur={() => setQty(parseInt(quantityText, 10) || 1)}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                    className="w-10 text-center text-sm font-semibold text-olive bg-transparent outline-none"
+                    className="w-14 text-center text-sm font-semibold text-olive bg-transparent outline-none"
                   />
                   <button onClick={() => setQty(quantity + 1)} aria-label="Increase quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-r-full text-olive"><Plus className="w-4 h-4" /></button>
                 </div>

@@ -13,7 +13,7 @@ interface SubscriptionInfo {
 interface CartStore {
   items: CartItem[];
   isOpen: boolean;
-  addItem: (product: Product, size: string, subscription?: SubscriptionInfo | null) => void;
+  addItem: (product: Product, size: string, subscription?: SubscriptionInfo | null, qty?: number) => void;
   removeItem: (productId: string, size: string, subscriptionKey?: string) => void;
   updateQuantity: (productId: string, size: string, quantity: number, subscriptionKey?: string) => void;
   clearCart: () => void;
@@ -29,7 +29,12 @@ export const useCartStore = create<CartStore>()(
       items: [],
       isOpen: false,
 
-      addItem: (product, size, subscription = null) => {
+      // `qty` so adding ten is one store write rather than ten. The product
+      // page used to call this in a loop, which meant a quantity of 250 — a
+      // real case for the RM1 item, where the quantity IS the price — fired
+      // hundreds of updates, each re-rendering and rewriting localStorage.
+      addItem: (product, size, subscription = null, qty = 1) => {
+        const amount = Math.max(1, Math.floor(qty) || 1);
         const items = get().items;
         const subKey = subscription ? `sub-${subscription.interval_months}` : "onetime";
         const existing = items.find(
@@ -41,12 +46,12 @@ export const useCartStore = create<CartStore>()(
             items: items.map((item) =>
               item.product.id === product.id && item.selectedSize === size &&
                 (item.subscription ? `sub-${item.subscription.interval_months}` : "onetime") === subKey
-                ? { ...item, quantity: item.quantity + 1 }
+                ? { ...item, quantity: item.quantity + amount }
                 : item
             ),
           });
         } else {
-          set({ items: [...items, { product, quantity: 1, selectedSize: size, subscription }] });
+          set({ items: [...items, { product, quantity: amount, selectedSize: size, subscription }] });
         }
         set({ isOpen: true });
       },
