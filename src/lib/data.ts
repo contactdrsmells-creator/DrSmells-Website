@@ -30,7 +30,11 @@ export async function getProducts(category?: string): Promise<Product[]> {
   let query = supabase.from("products").select("*").order("sort_order");
   if (category) query = query.eq("category", category);
   const { data } = await query;
-  return visible((data as Product[]) || []);
+
+  const items = visible((data as Product[]) || []);
+  // Asking for everything means the shop front, which a product can be kept
+  // out of while still appearing under its own category.
+  return category ? items : items.filter((p) => p.show_in_all !== false);
 }
 
 export async function getProduct(slug: string): Promise<Product | null> {

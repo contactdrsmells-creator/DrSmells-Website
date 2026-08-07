@@ -37,7 +37,7 @@ const PROMO_CATEGORY = "promo";
 const emptyProduct: Partial<Product> = {
   name: "", slug: "", description: "", short_description: "", price: 0, sale_price: null,
   category: "underarm", categories: [], related_products: [], image_url: "", images: [], sizes: [], variations: [],
-  in_stock: true, featured: false, hidden: false, sort_order: 0, page_sections: {},
+  in_stock: true, featured: false, hidden: false, show_in_all: true, sort_order: 0, page_sections: {},
 };
 
 export default function AdminProducts() {
@@ -192,6 +192,7 @@ export default function AdminProducts() {
       subscription_options: subOptions.length > 0 ? subOptions : null,
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
       hidden: !!editing.hidden,
+      show_in_all: editing.show_in_all !== false,
       page_sections,
     };
 
@@ -315,6 +316,26 @@ export default function AdminProducts() {
                     );
                   })}
                 </div>
+
+                {/* All Products is not one of the four — it is the absence of a
+                    filter — so it is offered as its own switch rather than as a
+                    fifth tick that would read like a category. */}
+                <label className="mt-4 flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-olive mt-0.5"
+                    // Undefined counts as on, so an older product still lists.
+                    checked={editing.show_in_all !== false}
+                    onChange={(e) => setEditing({ ...editing, show_in_all: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-700">Show in All Products</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      On by default. Turn it off to keep an item out of the main shop list
+                      while it still shows under its own categories and in Hot Promo.
+                    </span>
+                  </span>
+                </label>
 
                 {/* Kept apart from the four above: it is a campaign tag, not a
                     product type, and it is what fills the Hot Promo page. */}
@@ -955,6 +976,14 @@ export default function AdminProducts() {
                         title="Search and direct links only — not in the shop, categories, home page or related products"
                       >
                         Hidden
+                      </span>
+                    )}
+                    {!product.hidden && product.show_in_all === false && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full bg-sky-100 text-sky-800"
+                        title="Kept out of the All Products list; still shows under its own categories and in Hot Promo"
+                      >
+                        Not in All
                       </span>
                     )}
                   </div>

@@ -69,6 +69,14 @@ export interface Product {
    * For products that should be buyable but not on display.
    */
   hidden?: boolean;
+  /**
+   * Whether it belongs in the All Products list. Off leaves it in its own
+   * categories and in Hot Promo but out of the main list — for a promo-only or
+   * category-only item that would otherwise clutter the shop front.
+   *
+   * Undefined counts as on, so a product predating the column still lists.
+   */
+  show_in_all?: boolean;
   sort_order: number;
   page_sections: ProductPageSections;
 }

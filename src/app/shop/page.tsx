@@ -87,6 +87,11 @@ function ShopContent() {
       let items = ((data as Product[]) || []).filter((p) => p.hidden !== true);
       if (activeCategory) {
         items = items.filter((p) => (p.categories || []).includes(activeCategory));
+      } else {
+        // All Products only. A product left out of it still appears under its
+        // own categories and in Hot Promo — this is about the shop front, not
+        // about hiding it. "not false" so one predating the column still lists.
+        items = items.filter((p) => p.show_in_all !== false);
       }
       setProducts(items);
       setLoading(false);
