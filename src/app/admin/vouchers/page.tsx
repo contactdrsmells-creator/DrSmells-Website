@@ -32,6 +32,21 @@ const emptyVoucher = {
   free_shipping: false,
 };
 
+interface UsageOrder {
+  order_number: string;
+  customer: string;
+  email: string;
+  total: number;
+  discount: number;
+  created_at: string;
+}
+
+interface UsageSummary {
+  orders: number;
+  discount: number;
+  revenue: number;
+}
+
 export default function AdminVouchersPage() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,9 +55,39 @@ export default function AdminVouchersPage() {
   const [form, setForm] = useState(emptyVoucher);
   const [saving, setSaving] = useState(false);
 
+  // Usage is counted from paid orders rather than read off the voucher, so it
+  // is loaded separately.
+  const [counts, setCounts] = useState<Record<string, UsageSummary>>({});
+  const [detail, setDetail] = useState<{ code: string; orders: UsageOrder[]; summary: UsageSummary } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   useEffect(() => {
     loadVouchers();
+    loadCounts();
   }, []);
+
+  async function loadCounts() {
+    try {
+      const res = await fetch("/api/admin/voucher-usage");
+      if (!res.ok) return;
+      const data = await res.json();
+      setCounts(data.counts || {});
+    } catch {
+      // The list still works without it; usage simply shows as unknown.
+    }
+  }
+
+  async function openUsage(code: string) {
+    setDetailLoading(true);
+    setDetail({ code, orders: [], summary: { orders: 0, discount: 0, revenue: 0 } });
+    try {
+      const res = await fetch(`/api/admin/voucher-usage?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (res.ok) setDetail({ code, orders: data.orders || [], summary: data.summary });
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   async function loadVouchers() {
     try {
@@ -358,8 +403,19 @@ export default function AdminVouchersPage() {
                     <td className="px-4 py-3 text-gray-500">
                       {v.min_order_amount > 0 ? `RM${v.min_order_amount.toFixed(2)}` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {v.used_count}{v.max_uses ? ` / ${v.max_uses}` : " / ∞"}
+                    <td className="px-4 py-3">
+                      {/* Paid orders only, and clickable through to them —
+                          a number with nothing behind it was what made the old
+                          count impossible to check. */}
+                      <button
+                        onClick={() => openUsage(v.code)}
+                        className="text-olive hover:text-sage-dark font-medium underline decoration-dotted underline-offset-2"
+                        title="See the paid orders that used this voucher"
+                      >
+                        {counts[v.code.toUpperCase()]?.orders ?? 0}
+                        {v.max_uses ? ` / ${v.max_uses}` : " / ∞"}
+                      </button>
+                      <span className="block text-[11px] text-gray-400">paid orders</span>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {v.start_date && v.end_date
@@ -400,6 +456,85 @@ export default function AdminVouchersPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {detail && (
+        <div
+          className="fixed inset-0 bg-black/30 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={() => setDetail(null)}
+        >
+          <div
+            className="bg-white rounded-xl w-full max-w-3xl mt-10 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <div>
+                <h2 className="font-semibold text-olive font-mono">{detail.code}</h2>
+                <p className="text-xs text-gray-500">Paid orders that used this voucher</p>
+              </div>
+              <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 divide-x border-b text-center">
+              <div className="px-4 py-3">
+                <p className="text-lg font-semibold text-olive">{detail.summary.orders}</p>
+                <p className="text-xs text-gray-500">Paid orders</p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-lg font-semibold text-olive">RM {detail.summary.discount.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Discount given</p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-lg font-semibold text-olive">RM {detail.summary.revenue.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Revenue</p>
+              </div>
+            </div>
+
+            <div className="max-h-[55vh] overflow-y-auto">
+              {detailLoading ? (
+                <div className="py-10 text-center text-gray-400">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                </div>
+              ) : detail.orders.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-500">
+                  No paid order has used this voucher yet.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Order</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Customer</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Date</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Discount</th>
+                      <th className="text-right px-4 py-2 font-medium text-gray-600">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {detail.orders.map((o) => (
+                      <tr key={o.order_number} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 font-mono text-olive">{o.order_number}</td>
+                        <td className="px-4 py-2">
+                          {o.customer}
+                          {o.email && <span className="block text-xs text-gray-400">{o.email}</span>}
+                        </td>
+                        <td className="px-4 py-2 text-gray-500 text-xs">
+                          {new Date(o.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-500">
+                          {o.discount > 0 ? `− RM ${o.discount.toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-right font-medium">RM {o.total.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { countPaidVoucherUses } from "@/lib/voucher-usage";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -33,7 +34,9 @@ export async function POST(request: Request) {
       return Response.json({ valid: false, error: "This voucher has expired" });
     }
 
-    if (voucher.max_uses && voucher.used_count >= voucher.max_uses) {
+    // Counted from paid orders, so a limit is spent by sales rather than by
+    // people who applied the code and never paid.
+    if (voucher.max_uses && (await countPaidVoucherUses(supabase, voucher.code)) >= voucher.max_uses) {
       return Response.json({ valid: false, error: "This voucher has been fully redeemed" });
     }
 

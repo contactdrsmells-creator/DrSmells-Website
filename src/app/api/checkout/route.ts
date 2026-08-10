@@ -3,6 +3,7 @@ import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
 import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
+import { countPaidVoucherUses } from "@/lib/voucher-usage";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -126,7 +127,11 @@ export async function POST(request: Request) {
         const now = new Date();
         const notExpired = !voucher.end_date || new Date(voucher.end_date) > now;
         const notStarted = voucher.start_date && new Date(voucher.start_date) > now;
-        const withinLimit = !voucher.max_uses || voucher.used_count < voucher.max_uses;
+        // Counted from paid orders rather than read off the voucher, so an
+        // abandoned checkout cannot consume someone else's use.
+        const withinLimit =
+          !voucher.max_uses ||
+          (await countPaidVoucherUses(supabase, voucher.code)) < voucher.max_uses;
         const meetsMin = verifiedTotal >= (voucher.min_order_amount || 0);
 
         const subOk = !has_subscription || voucher.applicable_for_subscription;
@@ -144,10 +149,9 @@ export async function POST(request: Request) {
             serverShippingCost = 0;
           }
 
-          await supabase
-            .from("vouchers")
-            .update({ used_count: (voucher.used_count || 0) + 1 })
-            .eq("id", voucher.id);
+          // Nothing is incremented here. Usage is the number of paid orders
+          // carrying this code, which the order below records — counting at
+          // this point counted people who never paid.
         }
       }
     }
