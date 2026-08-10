@@ -2,40 +2,13 @@ import { createClient } from "@supabase/supabase-js";
 import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
 import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
+import { generateOrderNumber } from "@/lib/order-number";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 function getSupabase() {
   return createClient(supabaseUrl, supabaseServiceKey);
-}
-
-async function generateOrderNumber(): Promise<string> {
-  try {
-    const crmUrl = process.env.CRM_WEBHOOK_URL;
-    if (crmUrl) {
-      const crmBase = new URL(crmUrl).origin;
-      const crmRes = await fetch(`${crmBase}/api/webhook/next-order-id`, {
-        headers: { "x-webhook-secret": process.env.CRM_WEBHOOK_SECRET || "" },
-      });
-      if (crmRes.ok) {
-        const crmData = await crmRes.json();
-        if (crmData.next_id) {
-          const randomLetters = String.fromCharCode(
-            65 + Math.floor(Math.random() * 26),
-            65 + Math.floor(Math.random() * 26)
-          );
-          return `${crmData.next_id}W${randomLetters}`;
-        }
-      }
-    }
-  } catch {
-    console.error("[Checkout] Failed to fetch CRM next order ID");
-  }
-  const now = new Date();
-  const datePart = now.toISOString().slice(2, 10).replace(/-/g, "");
-  const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
-  return `DS-${datePart}-${rand}`;
 }
 
 /** Meta's click ids are opaque strings; cap them rather than storing anything sent. */
@@ -255,41 +228,56 @@ export async function POST(request: Request) {
           });
         });
 
-        onetimeItems.forEach((item: { product_name: string; quantity: number; variation: string; unit_price: number }) => {
-          lineItems.push({
-            price_data: {
-              currency: "myr",
-              product_data: {
-                name: `${item.product_name} (${item.variation})`,
-              },
-              unit_amount: Math.round(item.unit_price * 100),
-            },
-            quantity: item.quantity,
-          });
-        });
+        // One-off items and shipping go on the FIRST INVOICE, not into
+        // line_items. A subscription-mode session treats its line items as the
+        // thing being subscribed to, so a one-off sent that way is at best
+        // charged again at every renewal and at worst rejected outright. This
+        // is Stripe's supported route for "charge this once, alongside the
+        // subscription".
+        //
+        // add_invoice_items needs a real Product id rather than an inline name,
+        // so each one is created first. That is one extra call per distinct
+        // item, only on a mixed cart.
+        const addInvoiceItems: Array<{
+          price_data: { currency: string; product: string; unit_amount: number };
+          quantity: number;
+        }> = [];
 
-        if (serverShippingCost > 0) {
-          lineItems.push({
-            price_data: {
-              currency: "myr",
-              product_data: { name: "Shipping" },
-              unit_amount: Math.round(serverShippingCost * 100),
-            },
-            quantity: 1,
+        const onceOff: Array<{ name: string; amount: number; quantity: number }> = [
+          ...onetimeItems.map((item: { product_name: string; variation: string; unit_price: number; quantity: number }) => ({
+            name: `${item.product_name} (${item.variation})`,
+            amount: Math.round(item.unit_price * 100),
+            quantity: item.quantity,
+          })),
+          ...(serverShippingCost > 0
+            ? [{ name: "Shipping", amount: Math.round(serverShippingCost * 100), quantity: 1 }]
+            : []),
+        ];
+
+        for (const entry of onceOff) {
+          const product = await stripe.products.create({ name: entry.name });
+          addInvoiceItems.push({
+            price_data: { currency: "myr", product: product.id, unit_amount: entry.amount },
+            quantity: entry.quantity,
           });
         }
 
         // Stripe rejects negative line items — a coupon is the supported way to
         // apply a voucher discount.
         //
-        // "forever" rather than "once": on a subscription the customer should
-        // keep paying the price they signed up at, so the discount repeats on
-        // every renewal instead of the second invoice jumping to full price.
+        // "forever" on a subscription-only cart: the customer keeps paying the
+        // price they signed up at, rather than the second invoice jumping to
+        // full price.
+        //
+        // "once" as soon as anything one-off is in the basket, because the
+        // discount was sized against a total that included it. RM19.40 off a
+        // RM194 basket is 10%; repeated forever against a RM72 renewal it
+        // becomes 27% off, for good, from a single voucher.
         const discounts = serverDiscount > 0
           ? [{ coupon: (await stripe.coupons.create({
               amount_off: Math.round(serverDiscount * 100),
               currency: "myr",
-              duration: "forever",
+              duration: onceOff.length > 0 ? "once" : "forever",
               name: voucher_code || "Discount",
             })).id }]
           : undefined;
@@ -311,6 +299,7 @@ export async function POST(request: Request) {
               order_number: orderNumber,
               order_id: order.id,
             },
+            ...(addInvoiceItems.length > 0 ? { add_invoice_items: addInvoiceItems } : {}),
           },
         });
 

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { syncOrderToCRM } from "@/lib/crm-sync";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { markOrderPaid } from "@/lib/mark-order-paid";
+import { createRenewalOrder, type RenewalInvoice } from "@/lib/subscription-renewal";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
         await sendOrderConfirmationEmail(orderNumber);
       }
     } else if (event.type === "invoice.paid") {
-      const invoice = event.data.object as { subscription?: string; subscription_details?: { metadata?: { order_number?: string } } };
+      const invoice = event.data.object as RenewalInvoice;
       const orderNumber = invoice.subscription_details?.metadata?.order_number;
 
       if (orderNumber) {
@@ -69,6 +70,14 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("order_number", orderNumber);
+      }
+
+      // The first invoice is the checkout itself, and its order already exists.
+      // Every later cycle is a fresh delivery that nobody would otherwise know
+      // to pack, so it becomes its own order.
+      if (invoice.billing_reason === "subscription_cycle") {
+        const result = await createRenewalOrder(supabase, invoice);
+        console.log("[Subscription] renewal:", JSON.stringify(result));
       }
     } else if (event.type === "invoice.payment_failed") {
       const invoice = event.data.object as { subscription_details?: { metadata?: { order_number?: string } } };
