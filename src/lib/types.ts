@@ -170,6 +170,9 @@ export interface Order {
   shipping: ShippingAddress;
   subtotal: number;
   shipping_cost: number;
+  /** What the voucher took off. Written at checkout since vouchers existed. */
+  discount?: number;
+  voucher_code?: string | null;
   total: number;
   notes?: string;
   created_at: string;

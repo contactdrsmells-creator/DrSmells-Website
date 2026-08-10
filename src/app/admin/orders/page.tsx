@@ -500,6 +500,21 @@ export default function AdminOrdersPage() {
                               <span>Subtotal</span>
                               <span>RM {Number(order.subtotal).toFixed(2)}</span>
                             </div>
+                            {/* Shown above Shipping, where it was applied. The
+                                discount was recorded on every order all along;
+                                nothing displayed it, so the only clue a voucher
+                                had been used was a total that did not add up. */}
+                            {Number(order.discount) > 0 && (
+                              <div className="flex justify-between text-sm text-green-600">
+                                <span>
+                                  Discount
+                                  {order.voucher_code && (
+                                    <span className="font-mono text-xs ml-1">({order.voucher_code})</span>
+                                  )}
+                                </span>
+                                <span>− RM {Number(order.discount).toFixed(2)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between text-sm text-gray-500">
                               <span>Shipping</span>
                               <span>{Number(order.shipping_cost) === 0 ? "FREE" : `RM ${Number(order.shipping_cost).toFixed(2)}`}</span>
