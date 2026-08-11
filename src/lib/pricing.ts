@@ -71,6 +71,35 @@ export function resolveUnitPrice(product: PriceableProduct, selectedSize: string
 }
 
 /**
+ * True when a product prices through combinations but the selection matches
+ * none of them.
+ *
+ * resolveUnitPrice falls back to the base price in that case, which is right
+ * for a product that simply has no variations and wrong for one that does. The
+ * Underarm & Breath Freshening Set was offered as Mouthspray × Anti odour
+ * cream while its combination prices were still keyed on "Travel packs" from
+ * the product it had been copied from, so nothing could ever match: a RM89
+ * bundle sold for the RM49.90 base price, twice over, and the server agreed
+ * because it resolves prices through the very same function.
+ *
+ * A price that cannot be determined has to stop the order. Charging the base
+ * price is a silent loss that only surfaces by reading order lines by eye.
+ */
+export function hasUnmatchedCombo(product: PriceableProduct, selectedSize: string): boolean {
+  const combos = product.variation_combos || [];
+  if (!combos.length) return false;
+
+  // Not a combination selection at all — a plain variation name or no choice —
+  // so the ordinary fallbacks apply.
+  const selections = parseComboSelections(selectedSize);
+  if (!selections) return false;
+
+  return !combos.some((c) =>
+    Object.keys(selections).every((key) => c.selections?.[key] === selections[key]),
+  );
+}
+
+/**
  * Subscription price for a selection, or null if that selection has none.
  *
  * Server-side verification must resolve this from the product rather than

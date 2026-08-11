@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
-import { resolveUnitPrice, resolveSubscriptionPrice } from "@/lib/pricing";
+import { resolveUnitPrice, resolveSubscriptionPrice, hasUnmatchedCombo } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
@@ -93,6 +93,22 @@ export async function POST(request: Request) {
       //
       // Subscription prices are resolved from the product too — never taken
       // from the request, which would let a caller set its own recurring price.
+      // A selection that matches no combination price would silently fall back
+      // to the product's base price — and since the cart resolves prices the
+      // same way, both sides would agree on a figure that is simply wrong. One
+      // bundle sold at RM49.90 instead of RM89 this way. Refuse the order
+      // rather than take the wrong money.
+      if (hasUnmatchedCombo(product, item.variation)) {
+        console.error(
+          `[Checkout] "${item.product_name}" (${item.variation}) matches no combination price — ` +
+          `its combinations are keyed on different attributes than customers are offered.`,
+        );
+        return Response.json(
+          { error: `Sorry, "${item.product_name}" is not priced correctly at the moment. Please contact us and we will sort it out.` },
+          { status: 400 },
+        );
+      }
+
       const serverPrice = item.subscription
         ? (resolveSubscriptionPrice(product, item.variation) ?? resolveUnitPrice(product, item.variation))
         : resolveUnitPrice(product, item.variation);
