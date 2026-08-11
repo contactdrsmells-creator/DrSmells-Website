@@ -120,6 +120,17 @@ export default function ProductPage() {
     : null;
   const allAttrsSelected = hasMultiAttr ? varAttrs.every(a => selectedAttrs[a.name]) : true;
 
+  /**
+   * Every option chosen and still no combination price — the product's
+   * combinations are keyed on attributes it no longer offers, usually because
+   * it was copied from another product and the pricing was not re-entered.
+   *
+   * currentPrice falls back to the base price below, which is how a RM89
+   * bundle came to sell for RM49.90. Checkout now refuses these, so showing a
+   * price here would only walk the customer to a rejection at the last step.
+   */
+  const priceUnavailable = hasMultiAttr && allAttrsSelected && !matchedCombo;
+
   // Get price — multi-attr combo > simple variation > product-level
   const variations = product.variations || [];
   const selectedVariation = variations.find((v) => v.name === selectedSize);
@@ -254,7 +265,13 @@ export default function ProductPage() {
             <h1 className="text-2xl md:text-3xl font-bold text-olive mb-3 text-center md:text-left">{product.name}</h1>
             {/* Price Display */}
             <div className="flex items-center gap-2 mb-5 justify-center md:justify-start">
-              {hasMultiAttr && !allAttrsSelected && priceRange ? (
+              {priceUnavailable ? (
+                /* Better to say nothing is priced than to show the base price,
+                   which is what this combination is not worth. */
+                <span className="text-base font-medium text-gray-500">
+                  Price unavailable — please contact us
+                </span>
+              ) : hasMultiAttr && !allAttrsSelected && priceRange ? (
                 <span className="text-base font-medium text-gray-500">
                   RM {priceRange.min.toFixed(2)} – RM {priceRange.max.toFixed(2)}
                 </span>
@@ -417,12 +434,14 @@ export default function ProductPage() {
 
               <button
                 onClick={handleAddToCart}
-                disabled={hasMultiAttr ? (!allAttrsSelected || !comboInStock) : !product.in_stock}
+                disabled={hasMultiAttr ? (!allAttrsSelected || !comboInStock || priceUnavailable) : !product.in_stock}
                 className="flex-1 py-3 bg-olive text-white font-semibold rounded-full text-sm hover:bg-sage-dark transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               {hasMultiAttr
                 ? (!allAttrsSelected
                   ? "Select Options"
+                  : priceUnavailable
+                    ? "Price Unavailable"
                   : !comboInStock
                     ? "Out of Stock"
                     : purchaseType === "subscribe" && subEnabled
