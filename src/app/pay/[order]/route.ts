@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
+import { SITE_ORIGIN } from "@/lib/site-url";
 
 /**
  * Resume payment for an unpaid order: /pay/82WFP
@@ -200,8 +201,10 @@ export async function GET(
     );
   }
 
-  const origin =
-    process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
+  // The shop's own domain, not the host this link was opened on. Reminders
+  // already sent carry *.vercel.app addresses, and a customer who follows one
+  // should still be returned to drsmells.com.my after paying.
+  const origin = SITE_ORIGIN;
 
   const confirmation = `${origin}/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
 

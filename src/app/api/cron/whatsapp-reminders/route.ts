@@ -10,6 +10,7 @@ import {
   normalisePhone,
   sendToStrive,
 } from "@/lib/whatsapp-automation";
+import { SITE_ORIGIN } from "@/lib/site-url";
 
 /**
  * Sends a WhatsApp follow-up for orders left unpaid.
@@ -57,9 +58,10 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // The link customers receive. Prefer the configured site URL so a message
-  // never carries the raw *.vercel.app host the cron happened to hit.
-  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
+  // The link customers receive. Falling back to the request origin meant the
+  // shop's own domain was never used: this job is called by its *.vercel.app
+  // address, so customers were sent to drsmells-website.vercel.app/pay/... .
+  const siteOrigin = SITE_ORIGIN;
 
   const config = await loadAutomationConfig();
   if (!config.enabled) {
