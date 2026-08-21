@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useEffect } from "react";
+import AutoVideo from "@/components/AutoVideo";
 
 interface Banner {
   title: string;
@@ -12,28 +12,13 @@ interface Banner {
 }
 
 export default function VideoHero({ banner }: { banner?: Banner }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.play().catch(() => {});
-    }
-  }, []);
-
   return (
     <section className="relative w-full h-[70vh] md:h-[90vh] overflow-hidden bg-olive">
       {/* Video Background */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
+      <AutoVideo
+        src={banner?.video_url || "/videos/hero.mp4"}
         className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src={banner?.video_url || "/videos/hero.mp4"} type="video/mp4" />
-      </video>
+      />
 
       {/* Overlay */}
       <div className="absolute inset-0 bg-black/30" />

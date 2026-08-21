@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import AutoVideo from "@/components/AutoVideo";
 import { Product, ProductPageSections, FAQ } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
@@ -528,14 +529,7 @@ export default function ProductPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
             {sections.how_it_works_video && (
               <div className="overflow-hidden order-first lg:order-last">
-                <video
-                  src={sections.how_it_works_video}
-                  autoPlay
-                  loop
-                  muted
-                  className="w-full"
-                  playsInline
-                />
+                <AutoVideo src={sections.how_it_works_video} className="w-full" />
               </div>
             )}
             <div>
