@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
+import { createAtomePayment, isAtomeConfigured, ATOME_MIN_TOTAL_MYR } from "@/lib/atome";
 import { resolveUnitPrice, resolveSubscriptionPrice, hasUnmatchedCombo } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    if (!["stripe", "doku"].includes(payment_method)) {
+    if (!["stripe", "doku", "atome"].includes(payment_method)) {
       return Response.json({ error: "Invalid payment method" }, { status: 400 });
     }
 
@@ -383,6 +384,38 @@ export async function POST(request: Request) {
           .eq("id", order.id);
 
         redirect_url = session.url || "";
+      }
+    } else if (payment_method === "atome") {
+      if (!isAtomeConfigured()) {
+        return Response.json({ error: "Atome not configured" }, { status: 500 });
+      }
+      // Atome refuses anything under RM10; better said here than as a
+      // gateway error after the order row already exists.
+      if (serverTotal < ATOME_MIN_TOTAL_MYR) {
+        return Response.json({ error: `Atome requires a minimum of RM${ATOME_MIN_TOTAL_MYR}` }, { status: 400 });
+      }
+
+      const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+      try {
+        const payment = await createAtomePayment({
+          orderNumber,
+          total: serverTotal,
+          shippingCost: serverShippingCost,
+          items,
+          voucherCode: voucher_code,
+          customer: shipping,
+          origin,
+        });
+        redirect_url = payment.checkoutUrl;
+
+        await supabase
+          .from("orders")
+          .update({ payment_reference: payment.referenceId, payment_url: redirect_url || null })
+          .eq("id", order.id);
+      } catch (err) {
+        console.error("[Atome] Checkout failed:", (err as Error).message);
+        return Response.json({ error: "Failed to create Atome payment" }, { status: 500 });
       }
     } else if (payment_method === "doku") {
       if (!isDokuConfigured()) {

@@ -18,6 +18,7 @@ const MALAYSIAN_STATES = [
 
 interface PaymentSettings {
   doku_enabled: boolean;
+  atome_enabled: boolean;
   stripe_enabled: boolean;
 }
 
@@ -49,7 +50,7 @@ export default function CheckoutPage() {
   const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"doku" | "stripe">("doku");
+  const [paymentMethod, setPaymentMethod] = useState<"doku" | "stripe" | "atome">("doku");
 
   const [voucherCode, setVoucherCode] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherResult | null>(null);
@@ -86,6 +87,8 @@ export default function CheckoutPage() {
         setPaymentSettings(payData);
         setShippingZones(shipData.zones || []);
         if (payData.doku_enabled) setPaymentMethod("doku");
+        else if (payData.atome_enabled) setPaymentMethod("atome");
+        else if (payData.stripe_enabled) setPaymentMethod("stripe");
         else if (payData.stripe_enabled) setPaymentMethod("stripe");
       })
       .catch(() => {})
@@ -243,7 +246,7 @@ export default function CheckoutPage() {
   }
 
   const hasSubscription = items.some((item) => item.subscription);
-  const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !paymentSettings.stripe_enabled && !hasSubscription;
+  const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !paymentSettings.stripe_enabled && !paymentSettings.atome_enabled && !hasSubscription;
 
   return (
     <div className="min-h-screen bg-white">
@@ -382,6 +385,27 @@ export default function CheckoutPage() {
                         <div>
                           <p className="font-medium text-olive">DOKU (recommended)</p>
                           <p className="text-xs text-olive/50">FPX, E-Wallet, BNPL, Credit/Debit Card (Malaysia)</p>
+                        </div>
+                      </label>
+                    )}
+                    {paymentSettings?.atome_enabled && (
+                      <label className={`flex items-center gap-3 p-4 border border-olive/20 rounded-lg transition-colors ${orderTotal < 10 ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-olive/40"}`}>
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="atome"
+                          checked={paymentMethod === "atome"}
+                          onChange={() => setPaymentMethod("atome")}
+                          disabled={orderTotal < 10}
+                          className="accent-olive"
+                        />
+                        <div>
+                          <p className="font-medium text-olive">Atome</p>
+                          <p className="text-xs text-olive/50">
+                            {orderTotal < 10
+                              ? "Buy Now Pay Later — minimum order RM10"
+                              : "Buy Now Pay Later — split into 3 interest-free payments"}
+                          </p>
                         </div>
                       </label>
                     )}

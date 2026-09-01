@@ -6,6 +6,7 @@ import { Save, Loader2 } from "lucide-react";
 interface PaymentSettings {
   stripe_enabled: boolean;
   doku_enabled: boolean;
+  atome_enabled: boolean;
   shipping_cost: string;
   free_shipping_threshold: string;
   currency: string;
@@ -15,6 +16,7 @@ export default function AdminPaymentPage() {
   const [settings, setSettings] = useState<PaymentSettings>({
     stripe_enabled: false,
     doku_enabled: false,
+    atome_enabled: false,
     shipping_cost: "10.00",
     free_shipping_threshold: "100.00",
     currency: "MYR",
@@ -150,6 +152,43 @@ export default function AdminPaymentPage() {
               </p>
               <p className="text-sm text-yellow-700 mt-1">
                 <strong>Supported payment channels:</strong> FPX (Internet Banking), Touch &apos;n Go, GrabPay, ShopeePay, BNPL, Credit/Debit Card
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Atome */}
+        <div className="bg-white rounded-xl border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Atome</h2>
+              <p className="text-sm text-gray-500">Buy Now Pay Later — customer pays in 3 interest-free instalments (minimum order RM10)</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.atome_enabled}
+                onChange={(e) => setSettings({ ...settings, atome_enabled: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive"></div>
+            </label>
+          </div>
+          {settings.atome_enabled && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                <strong>Setup required:</strong> Add these environment variables to your Vercel project:
+              </p>
+              <ul className="text-sm text-yellow-700 mt-2 space-y-1 list-disc list-inside">
+                <li><code className="bg-yellow-100 px-1 rounded">ATOME_ACCESS_KEY</code> — Access Key from the Atome onboarding email</li>
+                <li><code className="bg-yellow-100 px-1 rounded">ATOME_PASSWORD</code> — Password from the same email</li>
+                <li><code className="bg-yellow-100 px-1 rounded">ATOME_API_URL</code> — (optional) defaults to production <code className="bg-yellow-100 px-1 rounded">https://api.apaylater.com/v2</code>. Set to <code className="bg-yellow-100 px-1 rounded">https://api.apaylater.net/v2</code> for testing.</li>
+              </ul>
+              <p className="text-sm text-yellow-700 mt-2">
+                The callback URL is sent automatically with each payment: <code className="bg-yellow-100 px-1 rounded">your-domain.com/api/webhooks/atome</code>
+              </p>
+              <p className="text-sm text-yellow-700 mt-1">
+                <strong>Note:</strong> Atome rejects orders under RM10 — the option is greyed out at checkout for smaller carts.
               </p>
             </div>
           )}

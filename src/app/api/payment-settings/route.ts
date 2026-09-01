@@ -26,6 +26,7 @@ export async function GET() {
     return Response.json({
       stripe_enabled: settings.stripe_enabled === true || settings.stripe_enabled === "true",
       doku_enabled: settings.doku_enabled === true || settings.doku_enabled === "true",
+      atome_enabled: settings.atome_enabled === true || settings.atome_enabled === "true",
       shipping_cost: settings.shipping_cost || "10.00",
       free_shipping_threshold: settings.free_shipping_threshold || "100.00",
       currency: settings.currency || "MYR",
@@ -34,6 +35,7 @@ export async function GET() {
     return Response.json({
       stripe_enabled: false,
       doku_enabled: false,
+      atome_enabled: false,
       shipping_cost: "10.00",
       free_shipping_threshold: "100.00",
       currency: "MYR",
@@ -57,6 +59,7 @@ export async function PUT(request: Request) {
         value: {
           stripe_enabled: !!body.stripe_enabled,
           doku_enabled: !!body.doku_enabled,
+          atome_enabled: !!body.atome_enabled,
           shipping_cost: body.shipping_cost || "10.00",
           free_shipping_threshold: body.free_shipping_threshold || "100.00",
           currency: body.currency || "MYR",
