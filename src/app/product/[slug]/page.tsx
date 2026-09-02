@@ -356,8 +356,15 @@ export default function ProductPage() {
                   }`}>
                     {purchaseType === "onetime" && <span className="w-2.5 h-2.5 rounded-full bg-olive" />}
                   </span>
+                  {/* The slashed original beside the sale price, same rule as
+                      the main price block above: only when a sale price
+                      actually undercuts it, so a product without a discount
+                      does not slash its own price against itself. */}
                   <span className="text-sm text-olive">
                     <span className="font-medium">Purchase one time</span>
+                    {allAttrsSelected && currentSalePrice && currentSalePrice < currentPrice && (
+                      <span className="ml-1 text-olive/40 line-through">RM{currentPrice.toFixed(2)}</span>
+                    )}
                     {allAttrsSelected && <span className="font-bold ml-1">RM{displayPrice.toFixed(2)}</span>}
                   </span>
                 </button>
