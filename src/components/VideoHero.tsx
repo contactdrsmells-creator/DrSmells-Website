@@ -9,6 +9,7 @@ interface Banner {
   cta_text: string;
   cta_link: string;
   video_url?: string | null;
+  image_url?: string | null;
 }
 
 export default function VideoHero({ banner }: { banner?: Banner }) {
@@ -17,6 +18,8 @@ export default function VideoHero({ banner }: { banner?: Banner }) {
       {/* Video Background */}
       <AutoVideo
         src={banner?.video_url || "/videos/hero.mp4"}
+        poster={banner?.image_url || undefined}
+        eager
         className="absolute inset-0 w-full h-full object-cover"
       />
 

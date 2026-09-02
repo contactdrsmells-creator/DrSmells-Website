@@ -13,6 +13,7 @@ export default function AdminBanners() {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const isConfigured =
     typeof window !== "undefined" &&
@@ -77,6 +78,27 @@ export default function AdminBanners() {
       alert("Upload failed");
     }
     setUploadingVideo(false);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "videos");
+    try {
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.url) {
+        setEditing((prev) => prev ? { ...prev, image_url: data.url } : prev);
+      } else {
+        alert(data.error || "Upload failed");
+      }
+    } catch {
+      alert("Upload failed");
+    }
+    setUploadingImage(false);
   }
 
   async function handleDelete(id: string) {
@@ -157,6 +179,36 @@ export default function AdminBanners() {
                     onChange={handleVideoUpload}
                     className="hidden"
                     disabled={uploadingVideo}
+                  />
+                </label>
+              </div>
+
+              {/* Loading image — shown instantly while the video downloads */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Loading Image</label>
+                <p className="text-xs text-gray-400 mb-2">Shows immediately while the video is still loading. Best: a screenshot of the video&apos;s first frame.</p>
+                {editing.image_url && (
+                  <div className="mb-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={editing.image_url} alt="Loading" className="w-full h-32 object-cover rounded-lg" />
+                    <button
+                      type="button"
+                      onClick={() => setEditing({ ...editing, image_url: null })}
+                      className="text-xs text-red-500 mt-1 hover:underline"
+                    >
+                      Remove image
+                    </button>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-teal text-sm text-gray-500">
+                  <Upload className="w-4 h-4" />
+                  {uploadingImage ? "Uploading..." : "Upload image (JPG/PNG)"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={uploadingImage}
                   />
                 </label>
               </div>

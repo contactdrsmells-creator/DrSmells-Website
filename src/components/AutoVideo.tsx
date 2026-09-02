@@ -30,10 +30,13 @@ export default function AutoVideo({
   src,
   className,
   poster,
+  eager,
 }: {
   src: string;
   className?: string;
   poster?: string;
+  /** Fetch the whole video immediately — for a video the page opens on. */
+  eager?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [needsTap, setNeedsTap] = useState(false);
@@ -108,7 +111,7 @@ export default function AutoVideo({
       muted
       loop
       playsInline
-      preload="metadata"
+      preload={eager ? "auto" : "metadata"}
       controls={needsTap}
       className={className}
       onClick={() => ref.current?.play().catch(() => {})}
