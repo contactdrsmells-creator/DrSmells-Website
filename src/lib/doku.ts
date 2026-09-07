@@ -37,6 +37,7 @@ export interface DokuCheckoutInput {
     city?: string;
     state?: string;
     postcode?: string;
+    country?: string;
   };
   /** Origin of the site, used for the customer-facing redirects. */
   origin: string;
@@ -115,7 +116,10 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
       name: c.name,
       email: c.email,
       phone: c.phone,
-      country: "MY",
+      // The gateway wants an ISO country code; sending MY for a Singapore
+      // address would have the customer's card checked against the wrong
+      // country.
+      country: /singapore/i.test(c.country ?? "") ? "SG" : "MY",
       address,
     },
     checkout_experience: {

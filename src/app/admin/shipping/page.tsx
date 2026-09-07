@@ -11,10 +11,14 @@ interface ShippingZone {
   free_shipping_min: number;
 }
 
+// "Singapore" sits among the states because zones are matched on the state
+// field, and the checkout writes the country's name there when it has no
+// states of its own.
 const ALL_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
   "Negeri Sembilan", "Pahang", "Penang", "Perak", "Perlis", "Putrajaya",
   "Sabah", "Sarawak", "Selangor", "Terengganu",
+  "Singapore",
 ];
 
 export default function AdminShippingPage() {

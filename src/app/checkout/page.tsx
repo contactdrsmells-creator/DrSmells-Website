@@ -16,6 +16,18 @@ const MALAYSIAN_STATES = [
   "Sabah", "Sarawak", "Selangor", "Terengganu",
 ];
 
+/**
+ * Singapore has no states, but shipping zones are matched on the state field,
+ * so it carries its own name there — which is also what the zone in the admin
+ * lists, keeping one rate table for both countries.
+ */
+const STATES_BY_COUNTRY: Record<string, string[]> = {
+  Malaysia: MALAYSIAN_STATES,
+  Singapore: ["Singapore"],
+};
+
+const COUNTRIES = Object.keys(STATES_BY_COUNTRY);
+
 interface PaymentSettings {
   doku_enabled: boolean;
   atome_enabled: boolean;
@@ -337,16 +349,42 @@ export default function CheckoutPage() {
                     />
                   </div>
                 </div>
-                <div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-olive/70 mb-1">Country *</label>
+                    <select
+                      value={shipping.country}
+                      onChange={(e) => {
+                        const country = e.target.value;
+                        const states = STATES_BY_COUNTRY[country] || [];
+                        // A state left over from the other country would match
+                        // the wrong shipping zone, so it is cleared — except
+                        // where there is only one, which needs no choosing.
+                        setShipping((prev) => ({
+                          ...prev,
+                          country,
+                          state: states.length === 1 ? states[0] : "",
+                        }));
+                      }}
+                      className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive bg-white"
+                      required
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-olive/70 mb-1">State *</label>
                   <select
                     value={shipping.state}
                     onChange={(e) => updateField("state", e.target.value)}
                     className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive bg-white"
                     required
+                    disabled={(STATES_BY_COUNTRY[shipping.country] || []).length === 1}
                   >
                     <option value="">Select state</option>
-                    {MALAYSIAN_STATES.map((s) => (
+                    {(STATES_BY_COUNTRY[shipping.country] || MALAYSIAN_STATES).map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
@@ -356,7 +394,13 @@ export default function CheckoutPage() {
                       {matchedZone.free_shipping_min > 0 && ` (Free shipping above RM${matchedZone.free_shipping_min.toFixed(2)})`}
                     </p>
                   )}
+                  </div>
                 </div>
+                {shipping.country !== "Malaysia" && (
+                  <p className="text-xs text-olive/60 -mt-2">
+                    All prices and payments are charged in Malaysian Ringgit (RM). Your bank converts at its own rate.
+                  </p>
+                )}
               </div>
 
               {/* Payment Method */}
