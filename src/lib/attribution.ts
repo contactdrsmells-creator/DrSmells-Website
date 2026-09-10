@@ -35,9 +35,24 @@ const REFERRER_NAMES: Record<string, string> = {
   "shopee.com.my": "Shopee",
 };
 
+/**
+ * Meta fills {{site_source_name}} in per impression, so an ad can say whether
+ * it ran on Facebook or Instagram without anyone typing it. When a placement
+ * has nothing to substitute, the braces arrive as written — recording that
+ * verbatim would invent a source named after the macro, so it is discarded and
+ * the click falls through to being recognised as Meta traffic.
+ */
+const isUnsubstituted = (value: string) => /[{}]/.test(value);
+
+/** Meta's own shorthand for where an ad ran. */
+const PLACEMENT_NAMES: Record<string, string> = {
+  an: "Audience Network",
+  msg: "Messenger",
+};
+
 function resolveSource(params: URLSearchParams, referrer: string): string | null {
   const utm = params.get("utm_source") || params.get("ref");
-  if (utm) return utm;
+  if (utm && !isUnsubstituted(utm)) return PLACEMENT_NAMES[utm.toLowerCase()] || utm;
 
   // Meta and Google append these to ad clicks automatically, so paid traffic is
   // still identifiable even when UTM tags were never set up on the campaign.
