@@ -17,6 +17,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * Shop images are not the visitor's to take: no dragging, no long-press save,
+ * no right-click through to the file.
+ *
+ * The admin is deliberately exempt. The same rules there stopped the owner
+ * saving their own photographs out of their own product editor, which is not
+ * what this was protecting against.
+ */
 img {
   -webkit-user-select: none;
   user-select: none;
@@ -25,6 +33,13 @@ img {
 }
 
 a img, button img {
+  pointer-events: auto;
+}
+
+.admin-area img {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
   pointer-events: auto;
 }
 

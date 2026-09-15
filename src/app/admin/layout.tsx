@@ -109,7 +109,9 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    // admin-area lifts the shop's image protection: the owner saving their own
+    // photographs is not the thing that rule exists to stop.
+    <div className="admin-area min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
         <div className="p-6 border-b">

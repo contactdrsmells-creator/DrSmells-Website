@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Product, ProductPageSections, ProductVariation, VariationAttribute, VariationCombo, SubscriptionOption } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
-import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy, Download } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 
@@ -646,6 +646,20 @@ export default function AdminProducts() {
                       <img src={url} alt="" className={`w-full aspect-square object-cover rounded-lg border-2 ${idx === 0 ? "border-olive" : "border-transparent"}`} />
                       {idx === 0 && <span className="absolute top-1 left-1 bg-olive text-white text-[10px] px-1.5 py-0.5 rounded font-medium">Cover</span>}
                       <button type="button" onClick={() => removeImage(idx)} className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                      {/* The stored file itself, not the resized copy the page
+                          displays — this is the original that was uploaded. */}
+                      <a
+                        href={url}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        draggable={false}
+                        title="Download original"
+                        className="absolute bottom-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                      >
+                        <Download className="w-3 h-3" />
+                      </a>
                     </div>
                   ))}
                 </div>
