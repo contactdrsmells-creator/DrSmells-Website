@@ -114,6 +114,20 @@ export default function ProductPage() {
   }
 
   // Multi-attribute variation system
+  /**
+   * A package named "配套 A : 除臭霜 x1, 磨砂膏 x1 + 赠品🎁" cannot share a row
+   * with two others — each pill wraps onto three cramped lines and the three
+   * of them read as one block of text. Past a point the options are stacked
+   * instead, one per row, where a long name has the width to be read.
+   *
+   * Measured in display width rather than characters, since a Chinese
+   * character occupies about twice the space of a latin one. Twenty keeps
+   * "1 bottle x 80ml" and "A- Woody ground" side by side as before.
+   */
+  const displayWidth = (s: string) =>
+    [...s].reduce((n, c) => n + (/[⺀-￿]/.test(c) ? 2 : 1), 0);
+  const stackSizes = product.sizes.some((s) => displayWidth(s) > 20);
+
   const varAttrs = product.variation_attributes || [];
   const varCombos = product.variation_combos || [];
   const hasMultiAttr = varAttrs.length >= 2 && varCombos.length > 0;
@@ -359,10 +373,10 @@ export default function ProductPage() {
             ) : product.sizes.length > 0 && (
               <div className="mb-5">
                 <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Size</p>
-                <div className="flex gap-2">
+                <div className={stackSizes ? "flex flex-col gap-2" : "flex flex-wrap gap-2"}>
                   {product.sizes.map((size) => (
                     <button key={size} onClick={() => setSelectedSize(size)}
-                      className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${selectedSize === size ? "bg-olive text-white" : "bg-gray-100 text-olive/70 hover:bg-gray-200"}`}
+                      className={`text-sm font-medium transition-all ${stackSizes ? "w-full text-left px-5 py-3 rounded-2xl" : "px-5 py-2.5 rounded-full"} ${selectedSize === size ? "bg-olive text-white" : "bg-gray-100 text-olive/70 hover:bg-gray-200"}`}
                     >{size}</button>
                   ))}
                 </div>
