@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AutoVideo from "@/components/AutoVideo";
 import { Product, ProductPageSections, FAQ } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
+import { useSiteWidgets } from "@/lib/site-widgets";
 import { ShieldCheck, Leaf, Truck, Minus, Plus, ChevronDown, ChevronUp, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import ValueProps from "@/components/ValueProps";
 import SafeHTML from "@/components/SafeHTML";
@@ -55,6 +56,10 @@ export default function ProductPage() {
   const [purchaseType, setPurchaseType] = useState<"onetime" | "subscribe">("onetime");
   const [selectedInterval, setSelectedInterval] = useState<number>(1);
   const addItem = useCartStore((s) => s.addItem);
+  const router = useRouter();
+  // The same link the floating button uses, so there is one number to change.
+  const { whatsapp_enabled, whatsapp_url } = useSiteWidgets();
+  const whatsappUrl = whatsapp_enabled ? whatsapp_url : null;
 
   const isConfigured =
     process.env.NEXT_PUBLIC_SUPABASE_URL !== "your_supabase_url_here" &&
@@ -193,6 +198,33 @@ export default function ProductPage() {
     setQuantityText("1");
   };
 
+  /**
+   * The same thing, then straight to checkout.
+   *
+   * Someone who arrived from an ad for this one product has already decided;
+   * making them find the cart afterwards is a step that only loses them.
+   */
+  const handleBuyNow = () => {
+    if (hasMultiAttr && !allAttrsSelected) return;
+    const subscription = purchaseType === "subscribe" && subEnabled
+      ? { interval_months: selectedInterval, price: subPrice }
+      : null;
+    addItem(product, cartLabel, subscription, quantity);
+    router.push("/checkout");
+  };
+
+  /** Why neither button can be pressed, or null when both can. */
+  const unavailableLabel = hasMultiAttr
+    ? (!allAttrsSelected
+      ? "Select Options"
+      : priceUnavailable
+        ? "Price Unavailable"
+        : !comboInStock
+          ? "Out of Stock"
+          : null)
+    : (product.in_stock ? null : "Out of Stock");
+  const buyDisabled = unavailableLabel !== null;
+
   /** Keeps the number and the text in the box in step, within bounds. */
   const setQty = (n: number) => {
     const next = clampQty(Number.isFinite(n) ? n : 1);
@@ -265,9 +297,9 @@ export default function ProductPage() {
 
           {/* Product Info */}
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-olive mb-3 text-center md:text-left">{product.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-olive mb-3">{product.name}</h1>
             {/* Price Display */}
-            <div className="flex items-center gap-2 mb-5 justify-center md:justify-start">
+            <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
               {priceUnavailable ? (
                 /* Better to say nothing is priced than to show the base price,
                    which is what this combination is not worth. */
@@ -280,14 +312,14 @@ export default function ProductPage() {
                 </span>
               ) : currentSalePrice ? (
                 <>
-                  <span className="text-base font-medium text-gray-500">RM {currentSalePrice.toFixed(2)}</span>
-                  <span className="text-sm text-gray-400 line-through">RM {currentPrice.toFixed(2)}</span>
+                  <span className="text-3xl md:text-4xl font-bold text-olive">RM {currentSalePrice.toFixed(2)}</span>
+                  <span className="text-base text-gray-400 line-through">RM {currentPrice.toFixed(2)}</span>
                   <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded-full">
                     {Math.round(((currentPrice - currentSalePrice) / currentPrice) * 100)}% OFF
                   </span>
                 </>
               ) : (
-                <span className="text-base font-medium text-gray-500">RM {currentPrice.toFixed(2)}</span>
+                <span className="text-3xl md:text-4xl font-bold text-olive">RM {currentPrice.toFixed(2)}</span>
               )}
             </div>
 
@@ -295,7 +327,7 @@ export default function ProductPage() {
               <div className="mb-6">
                 <SafeHTML
                   html={product.description}
-                  className="text-xs md:text-sm leading-relaxed prose prose-sm max-w-none text-center md:text-left"
+                  className="text-xs md:text-sm leading-relaxed prose prose-sm max-w-none"
                 />
               </div>
             )}
@@ -414,55 +446,66 @@ export default function ProductPage() {
               </div>
             )}
 
-            <div className="flex items-end gap-3 mb-6">
-              <div>
-                <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Quantity</p>
-                <div className="inline-flex items-center border border-olive/20 rounded-full">
-                  <button onClick={() => setQty(quantity - 1)} aria-label="Decrease quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-l-full text-olive"><Minus className="w-4 h-4" /></button>
-                  {/* text + inputMode rather than type="number": the spinner
-                      arrows duplicate the buttons either side, and a stray
-                      scroll over a number field silently changes the order. */}
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    aria-label="Quantity"
-                    value={quantityText}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "");
-                      setQuantityText(digits);
-                      // An empty box leaves the previous number in place, so the
-                      // Add to Cart total doesn't flash RM 0.00 mid-edit.
-                      if (digits) setQuantity(clampQty(parseInt(digits, 10)));
-                    }}
-                    onBlur={() => setQty(parseInt(quantityText, 10) || 1)}
-                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                    className="w-14 text-center text-sm font-semibold text-olive bg-transparent outline-none"
-                  />
-                  <button onClick={() => setQty(quantity + 1)} aria-label="Increase quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-r-full text-olive"><Plus className="w-4 h-4" /></button>
-                </div>
+            {/* Quantity sits beside the price rather than under a heading of
+                its own: on a phone the two are one decision, and the buttons
+                below should be the next thing the thumb reaches. */}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-xs font-semibold text-olive uppercase tracking-wide">Quantity</span>
+              <div className="inline-flex items-center border border-olive/20 rounded-full">
+                <button onClick={() => setQty(quantity - 1)} aria-label="Decrease quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-l-full text-olive"><Minus className="w-4 h-4" /></button>
+                {/* text + inputMode rather than type="number": the spinner
+                    arrows duplicate the buttons either side, and a stray
+                    scroll over a number field silently changes the order. */}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label="Quantity"
+                  value={quantityText}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setQuantityText(digits);
+                    // An empty box leaves the previous number in place, so the
+                    // total doesn't flash RM 0.00 mid-edit.
+                    if (digits) setQuantity(clampQty(parseInt(digits, 10)));
+                  }}
+                  onBlur={() => setQty(parseInt(quantityText, 10) || 1)}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                  className="w-14 text-center text-sm font-semibold text-olive bg-transparent outline-none"
+                />
+                <button onClick={() => setQty(quantity + 1)} aria-label="Increase quantity" className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors rounded-r-full text-olive"><Plus className="w-4 h-4" /></button>
               </div>
+            </div>
+
+            <div className="space-y-2.5 mb-5">
+              <button
+                onClick={handleBuyNow}
+                disabled={buyDisabled}
+                className="w-full py-4 bg-olive text-white font-bold rounded-full text-base tracking-wide hover:bg-sage-dark transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {unavailableLabel || (purchaseType === "subscribe" && subEnabled
+                  ? `SUBSCRIBE — RM ${(subPrice * quantity).toFixed(2)}/mo`
+                  : `BUY NOW — RM ${(displayPrice * quantity).toFixed(2)}`)}
+              </button>
 
               <button
                 onClick={handleAddToCart}
-                disabled={hasMultiAttr ? (!allAttrsSelected || !comboInStock || priceUnavailable) : !product.in_stock}
-                className="flex-1 py-3 bg-olive text-white font-semibold rounded-full text-sm hover:bg-sage-dark transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {hasMultiAttr
-                ? (!allAttrsSelected
-                  ? "Select Options"
-                  : priceUnavailable
-                    ? "Price Unavailable"
-                  : !comboInStock
-                    ? "Out of Stock"
-                    : purchaseType === "subscribe" && subEnabled
-                      ? `Subscribe — RM ${(subPrice * quantity).toFixed(2)}/mo`
-                      : `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`)
-                : (product.in_stock
-                  ? purchaseType === "subscribe" && subEnabled
-                    ? `Subscribe — RM ${(subPrice * quantity).toFixed(2)}/mo`
-                    : `Add to Cart — RM ${(displayPrice * quantity).toFixed(2)}`
-                  : "Out of Stock")}
-            </button>
+                disabled={buyDisabled}
+                className="w-full py-3.5 bg-white text-olive font-semibold rounded-full text-sm border-2 border-olive/25 hover:border-olive/50 transition-colors disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
+              >
+                {unavailableLabel || "Add to cart"}
+              </button>
+            </div>
+
+            {/* The three things a shopper checks before paying on a phone. */}
+            <div className="space-y-1.5 mb-6 text-xs text-olive/70">
+              <p>🔒 Secure checkout — FPX / Card / Atome 3-pay</p>
+              <p>🚚 Ships from Malaysia</p>
+              {whatsappUrl && (
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-block text-green-700 underline underline-offset-2 hover:text-green-800">
+                  Not sure? Chat with us on WhatsApp
+                </a>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-3 mb-6">
