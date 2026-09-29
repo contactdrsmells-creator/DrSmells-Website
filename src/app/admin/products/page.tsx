@@ -180,8 +180,21 @@ export default function AdminProducts() {
     const baseSalePrice = variations.length > 0 ? (variations[0].sale_price || null) : (editing.sale_price || null);
 
     const categories = editing.categories || [];
+
+    // The slug is the product's web address. Left empty, the link becomes
+    // "/product" with nothing after it and the page 404s — which is easy to do,
+    // because a Chinese name gives a slugifier nothing to work with. So one is
+    // derived here, and a name with no latin letters at all still gets a
+    // usable address rather than none.
+    const derivedSlug = (editing.slug || "").trim()
+      || (editing.name || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+      || `product-${Date.now().toString(36)}`;
+
     const productData = {
-      name: editing.name, slug: editing.slug, description: editing.description,
+      name: editing.name, slug: derivedSlug, description: editing.description,
       short_description: editing.short_description, price: basePrice,
       sale_price: baseSalePrice, category: categories[0] || "underarm", categories,
       related_products: editing.related_products || [],
@@ -286,6 +299,10 @@ export default function AdminProducts() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Slug (URL)</label>
                   <input type="text" value={editing.slug || ""} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="anti-odour-cream" />
+                  <p className="text-xs text-gray-400 mt-1">
+                    The product&apos;s web address: drsmells.com.my/product/<span className="font-mono">{editing.slug || "…"}</span>
+                    {!editing.slug && " — leave blank and one is made for you"}
+                  </p>
                 </div>
               </div>
               <div>
