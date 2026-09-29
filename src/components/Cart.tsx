@@ -3,10 +3,11 @@
 import { X, Plus, Minus, Trash2 } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { resolveUnitPrice } from "@/lib/pricing";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Cart() {
   const router = useRouter();
+  const pathname = usePathname();
   const items = useCartStore((s) => s.items);
   const setCartOpen = useCartStore((s) => s.setCartOpen);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -132,6 +133,18 @@ export default function Cart() {
               className="w-full py-3 bg-olive text-cream font-semibold rounded-lg hover:bg-sage-dark transition-colors"
             >
               Proceed to Checkout
+            </button>
+            {/* Closing the drawer is enough when the shop is already behind
+                it — pushing the same route would only scroll them back to the
+                top of the list they were reading. */}
+            <button
+              onClick={() => {
+                setCartOpen(false);
+                if (pathname !== "/shop") router.push("/shop");
+              }}
+              className="w-full py-3 mt-2 border border-olive/20 text-olive font-semibold rounded-lg hover:bg-olive/5 transition-colors"
+            >
+              Continue Shopping
             </button>
           </div>
         )}
