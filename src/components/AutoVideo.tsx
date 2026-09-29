@@ -45,18 +45,26 @@ export default function AutoVideo({
     const el = ref.current;
     if (!el) return;
 
-    let playing = false;
+    let inView = false;
     let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
 
+    /**
+     * Asks the element whether it is playing rather than remembering that it
+     * once did.
+     *
+     * A remembered flag was the bug: after the first successful play nothing
+     * tried again, so anything that paused the video afterwards — scrolling it
+     * off screen on iOS, another tab taking over, Low Power Mode engaging
+     * mid-visit — stopped it for the rest of the session.
+     */
     const tryPlay = () => {
-      if (playing) return;
+      if (!el.paused) return;
       // Set muted through the property as well as the attribute: some browsers
       // consult the property when deciding whether autoplay is permitted, and
       // refuse a video they consider unmuted.
       el.muted = true;
       el.play().then(
         () => {
-          playing = true;
           setNeedsTap(false);
           clearTimeout(giveUpTimer);
         },
@@ -70,31 +78,49 @@ export default function AutoVideo({
       document.addEventListener(type, onGesture, { passive: true }),
     );
 
-    const media: (keyof HTMLMediaElementEventMap)[] = ["loadeddata", "canplay", "canplaythrough"];
+    // "pause" covers the browser stopping it of its own accord; "ended" covers
+    // a loop that did not come round, which some in-app browsers manage.
+    const media: (keyof HTMLMediaElementEventMap)[] = [
+      "loadeddata", "canplay", "canplaythrough", "pause", "ended", "stalled", "suspend",
+    ];
     media.forEach((type) => el.addEventListener(type, tryPlay));
+
+    // Coming back to the tab is the most common way a video is found stopped.
+    const onVisible = () => { if (document.visibilityState === "visible") tryPlay(); };
+    document.addEventListener("visibilitychange", onVisible);
 
     const observer = new IntersectionObserver(
       (entries) =>
         entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
+          inView = entry.isIntersecting;
+          if (!inView) return;
           // Worth the bandwidth now that it is actually being looked at.
           if (el.preload !== "auto") el.preload = "auto";
           tryPlay();
           // Only offer a play button once it has had its chance on screen.
           clearTimeout(giveUpTimer);
           giveUpTimer = setTimeout(() => {
-            if (!playing) setNeedsTap(true);
+            if (el.paused) setNeedsTap(true);
           }, 2500);
         }),
       { threshold: 0.25 },
     );
     observer.observe(el);
 
+    // The catch-all. Events cover the causes we know of; a video can still be
+    // stopped by something we do not hear about, and while it is on screen it
+    // should be playing. Cheap: a paused check, twice a second is not needed.
+    const keepPlaying = setInterval(() => {
+      if (inView && document.visibilityState === "visible") tryPlay();
+    }, 1500);
+
     return () => {
       observer.disconnect();
+      clearInterval(keepPlaying);
       clearTimeout(giveUpTimer);
       gestures.forEach((type) => document.removeEventListener(type, onGesture));
       media.forEach((type) => el.removeEventListener(type, tryPlay));
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [src]);
 
