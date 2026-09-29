@@ -241,12 +241,17 @@ export default function ProductPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14">
           {/* Image Gallery */}
           <div>
-            <div className="relative aspect-square bg-white rounded-2xl flex items-center justify-center overflow-hidden mb-3">
+            {/* The box takes the shape of the picture rather than the other
+                way round. A square frame put white bars either side of a tall
+                campaign poster — the one image where filling the screen is the
+                whole point. Capped so an unusually long graphic still leaves
+                the price and buttons within reach of a thumb. */}
+            <div className="relative bg-white rounded-2xl flex items-center justify-center overflow-hidden mb-3 min-h-[280px]">
               {allImages.length > 0 ? (
                 <img
                   src={allImages[activeImage]}
                   alt={product.name}
-                  className="w-full h-full object-contain"
+                  className="w-full h-auto max-h-[78vh] object-contain"
                 />
               ) : (
                 <div className="text-center">
