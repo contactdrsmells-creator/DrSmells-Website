@@ -49,3 +49,16 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/*
+ * Tapping a form field smaller than 16px makes iOS Safari zoom the page in —
+ * and it does not zoom back out, leaving the shop scrolled sideways with the
+ * logo and half the text off the screen. Sixteen pixels is the threshold, so
+ * every field meets it on a phone; pinch-zoom is untouched and still works.
+ */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

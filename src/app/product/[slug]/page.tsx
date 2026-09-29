@@ -8,7 +8,6 @@ import { Product, ProductPageSections, FAQ } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
-import { useSiteWidgets } from "@/lib/site-widgets";
 import { ShieldCheck, Leaf, Truck, Minus, Plus, ChevronDown, ChevronUp, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import ValueProps from "@/components/ValueProps";
 import SafeHTML from "@/components/SafeHTML";
@@ -57,9 +56,6 @@ export default function ProductPage() {
   const [selectedInterval, setSelectedInterval] = useState<number>(1);
   const addItem = useCartStore((s) => s.addItem);
   const router = useRouter();
-  // The same link the floating button uses, so there is one number to change.
-  const { whatsapp_enabled, whatsapp_url } = useSiteWidgets();
-  const whatsappUrl = whatsapp_enabled ? whatsapp_url : null;
 
   const isConfigured =
     process.env.NEXT_PUBLIC_SUPABASE_URL !== "your_supabase_url_here" &&
@@ -354,14 +350,6 @@ export default function ProductPage() {
                 {allAttrsSelected && matchedCombo && !comboInStock && (
                   <p className="text-sm text-red-500">Out of stock</p>
                 )}
-                {Object.keys(selectedAttrs).length > 0 && (
-                  <button
-                    onClick={() => setSelectedAttrs({})}
-                    className="text-xs text-olive/50 hover:text-olive underline"
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
             ) : product.sizes.length > 0 && (
               <div className="mb-5">
@@ -500,12 +488,6 @@ export default function ProductPage() {
             <div className="space-y-1.5 mb-6 text-xs text-olive/70">
               <p>🔒 Secure checkout — FPX / Card / Atome 3-pay</p>
               <p>🚚 Ships from Malaysia</p>
-              {whatsappUrl && (
-                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-block text-green-700 underline underline-offset-2 hover:text-green-800">
-                  Not sure? Chat with us on WhatsApp
-                </a>
-              )}
             </div>
 
             <div className="grid grid-cols-3 gap-3 mb-6">
