@@ -205,6 +205,7 @@ export default function AdminProducts() {
       subscription_options: subOptions.length > 0 ? subOptions : null,
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
       hidden: !!editing.hidden,
+      reviews_hidden: !!editing.reviews_hidden,
       show_in_all: editing.show_in_all !== false,
       page_sections,
     };
@@ -404,6 +405,24 @@ export default function AdminProducts() {
                       Kept out of All Products, every category, the home page and related
                       products. Customers can still reach it by searching, or with a direct
                       link — so it stays buyable without being on display.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-olive mt-0.5"
+                    checked={!!editing.reviews_hidden}
+                    onChange={(e) => setEditing({ ...editing, reviews_hidden: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-700">Hide customer reviews</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Takes the review section off this product&apos;s page. Useful for a new
+                      or campaign product with nothing written about it yet — an empty
+                      &ldquo;0 reviews&rdquo; block says less than no block at all. Existing
+                      reviews are kept and come back when this is unticked.
                     </span>
                   </span>
                 </label>

@@ -69,6 +69,8 @@ export interface Product {
    * For products that should be buyable but not on display.
    */
   hidden?: boolean;
+  /** Keeps the review section off this product's page. */
+  reviews_hidden?: boolean;
   /**
    * Whether it belongs in the All Products list. Off leaves it in its own
    * categories and in Hot Promo but out of the main list — for a promo-only or

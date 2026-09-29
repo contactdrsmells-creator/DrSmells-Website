@@ -84,11 +84,13 @@ export default function ProductPage() {
         // A hidden product is not shown here either. Its own page still works —
         // this only stops it being surfaced from somewhere else on the site.
         const allProds = ((allProductsRes.data || []) as Product[]).filter((p) => p.hidden !== true);
-        if (relatedIds.length > 0) {
-          setRelatedProducts(allProds.filter((p) => relatedIds.includes(p.id)));
-        } else {
-          setRelatedProducts(allProds.filter((p) => p.slug !== slug).slice(0, 4));
-        }
+        // Only what was chosen. Filling the space with whatever else was in
+        // the shop meant a page with nothing selected still recommended four
+        // products — which is not a recommendation, and on a campaign page
+        // sends people away from the thing being campaigned.
+        setRelatedProducts(relatedIds.length > 0
+          ? allProds.filter((p) => relatedIds.includes(p.id))
+          : []);
       }
       if (siteImagesRes.data?.[0]) setSiteImages(siteImagesRes.data[0].value as Record<string, string>);
     }
@@ -624,7 +626,9 @@ export default function ProductPage() {
       )}
 
       {/* ===== SECTION 6: Customer Reviews ===== */}
-      <ReviewSection productId={product.id} productName={product.name} />
+      {product.reviews_hidden !== true && (
+        <ReviewSection productId={product.id} productName={product.name} />
+      )}
 
       {/* ===== YOU MAY ALSO LIKE ===== */}
       {relatedProducts.length > 0 && (
