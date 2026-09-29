@@ -5,6 +5,7 @@ import { resolveUnitPrice, resolveSubscriptionPrice, hasUnmatchedCombo } from "@
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
+import { findZone, quoteShipping, readShippingRates, type ProductShippingRates, type ShippingZone } from "@/lib/shipping";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -77,10 +78,11 @@ export async function POST(request: Request) {
 
     // Server-side price verification
     let verifiedTotal = 0;
+    const shippingLines: { name: string; rates: ProductShippingRates | null }[] = [];
     for (const item of items) {
       const { data: product } = await supabase
         .from("products")
-        .select("price, sale_price, variations, variation_combos")
+        .select("price, sale_price, variations, variation_combos, shipping_rates")
         .eq("id", item.product_id)
         .single();
 
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
         : resolveUnitPrice(product, item.variation);
 
       verifiedTotal += serverPrice * item.quantity;
+      shippingLines.push({ name: item.product_name, rates: readShippingRates(product) });
     }
 
     // Verify shipping cost from zones
@@ -124,10 +127,10 @@ export async function POST(request: Request) {
       .eq("key", "shipping")
       .single();
 
-    const zones = shippingSettings?.value?.zones || [];
-    const matchedZone = zones.find((z: { states: string[] }) => z.states.includes(shipping.state));
+    const zones: ShippingZone[] = shippingSettings?.value?.zones || [];
+    const matchedZone = findZone(zones, shipping.state);
     let serverShippingCost = matchedZone
-      ? (matchedZone.free_shipping_min > 0 && verifiedTotal >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
+      ? quoteShipping(shippingLines, matchedZone, verifiedTotal).cost
       : (shipping_cost || 0);
 
     // Verify voucher server-side

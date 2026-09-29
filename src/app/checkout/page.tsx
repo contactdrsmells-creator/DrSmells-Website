@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 import { resolveUnitPrice } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/components/MetaPixel";
 import { getOrderSource, getMetaTrackingData } from "@/lib/attribution";
+import { findZone, quoteShipping, type ShippingZone } from "@/lib/shipping";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -32,14 +33,6 @@ interface PaymentSettings {
   doku_enabled: boolean;
   atome_enabled: boolean;
   stripe_enabled: boolean;
-}
-
-interface ShippingZone {
-  id: string;
-  name: string;
-  states: string[];
-  flat_rate: number;
-  free_shipping_min: number;
 }
 
 interface VoucherResult {
@@ -118,12 +111,13 @@ export default function CheckoutPage() {
     );
   }
 
-  const matchedZone = shippingZones.find((z) => z.states.includes(shipping.state));
-  const shippingCost = appliedVoucher?.free_shipping
-    ? 0
-    : matchedZone
-      ? (matchedZone.free_shipping_min > 0 && totalPrice >= matchedZone.free_shipping_min ? 0 : matchedZone.flat_rate)
-      : 0;
+  const matchedZone = findZone(shippingZones, shipping.state);
+  const quote = quoteShipping(
+    items.map((i) => ({ name: i.product.name, rates: i.product.shipping_rates })),
+    matchedZone,
+    totalPrice,
+  );
+  const shippingCost = appliedVoucher?.free_shipping ? 0 : quote.cost;
 
   const discount = appliedVoucher
     ? appliedVoucher.discount_type === "percentage"
@@ -391,7 +385,11 @@ export default function CheckoutPage() {
                   {shipping.state && matchedZone && (
                     <p className="text-xs text-olive/50 mt-1">
                       Shipping zone: {matchedZone.name}
-                      {matchedZone.free_shipping_min > 0 && ` (Free shipping above RM${matchedZone.free_shipping_min.toFixed(2)})`}
+                      {/* The shop's free-shipping offer does not apply to an
+                          order priced by a product's own rate, so promising it
+                          here would be withdrawn in the summary below. */}
+                      {!quote.specialProduct && matchedZone.free_shipping_min > 0
+                        && ` (Free shipping above RM${matchedZone.free_shipping_min.toFixed(2)})`}
                     </p>
                   )}
                   </div>
@@ -565,7 +563,12 @@ export default function CheckoutPage() {
                   {shippingCost === 0 && shipping.state && appliedVoucher?.free_shipping && (
                     <p className="text-xs text-green-600">Free shipping applied via voucher</p>
                   )}
-                  {shippingCost === 0 && shipping.state && matchedZone && matchedZone.free_shipping_min > 0 && !appliedVoucher?.free_shipping && (
+                  {shipping.state && quote.specialProduct && !appliedVoucher?.free_shipping && (
+                    <p className="text-xs text-green-600">
+                      Special shipping rate for {quote.specialProduct}
+                    </p>
+                  )}
+                  {shippingCost === 0 && shipping.state && matchedZone && matchedZone.free_shipping_min > 0 && !quote.specialProduct && !appliedVoucher?.free_shipping && (
                     <p className="text-xs text-green-600">Free shipping on orders above RM {matchedZone.free_shipping_min.toFixed(2)}</p>
                   )}
                   <div className="flex justify-between text-lg font-bold text-olive pt-2 border-t border-olive/10">

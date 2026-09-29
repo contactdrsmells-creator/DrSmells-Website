@@ -80,6 +80,12 @@ export interface Product {
    */
   show_in_all?: boolean;
   sort_order: number;
+  /**
+   * This product's own cost to ship, per zone id, in place of the shop's rate
+   * table — for a campaign that advertises its own shipping price. Absent
+   * means the normal rates apply.
+   */
+  shipping_rates?: Record<string, number> | null;
   page_sections: ProductPageSections;
 }
 

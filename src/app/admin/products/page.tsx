@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy, Download } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
+import type { ShippingZone } from "@/lib/shipping";
 
 // Collapsible panel inside modal
 function Panel({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
@@ -42,6 +43,7 @@ const emptyProduct: Partial<Product> = {
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [variations, setVariations] = useState<ProductVariation[]>([]);
@@ -70,6 +72,15 @@ export default function AdminProducts() {
   }
 
   useEffect(() => { loadProducts(); }, []);
+
+  // The special-rate editor lists the owner's own zones rather than a fixed
+  // West/East/Singapore, so adding a zone in Shipping settings shows up here.
+  useEffect(() => {
+    fetch("/api/shipping-settings")
+      .then((r) => r.json())
+      .then((d) => setShippingZones(d.zones || []))
+      .catch(() => {});
+  }, []);
 
   async function loadProducts() {
     if (!isConfigured) { setProducts(sampleProducts); return; }
@@ -206,6 +217,9 @@ export default function AdminProducts() {
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
       hidden: !!editing.hidden,
       reviews_hidden: !!editing.reviews_hidden,
+      shipping_rates: editing.shipping_rates && Object.keys(editing.shipping_rates).length > 0
+        ? editing.shipping_rates
+        : null,
       show_in_all: editing.show_in_all !== false,
       page_sections,
     };
@@ -426,6 +440,68 @@ export default function AdminProducts() {
                     </span>
                   </span>
                 </label>
+              </div>
+
+              {/* Special shipping rates */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Special shipping rates
+                </label>
+                <p className="text-xs text-gray-500 mt-1 mb-3">
+                  Leave every box empty and this product ships at the normal rates set in
+                  Shipping. Fill a box in and that zone costs exactly what you type for this
+                  product — including RM0 for free — and the shop&apos;s
+                  &ldquo;free above RM50&rdquo; offer no longer applies to it. If this product
+                  is in the basket, its rates price the whole order.
+                </p>
+
+                {shippingZones.length === 0 ? (
+                  <p className="text-xs text-gray-400">
+                    No shipping zones set up yet — add them in Shipping first.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {shippingZones.map((zone) => {
+                      const rate = editing.shipping_rates?.[zone.id];
+                      const hasRate = typeof rate === "number";
+                      return (
+                        <div key={zone.id} className="flex items-center gap-3">
+                          <span className="flex-1 text-sm text-gray-700">
+                            {zone.name}
+                            <span className="block text-xs text-gray-400">
+                              Normally RM{zone.flat_rate.toFixed(2)}
+                              {zone.free_shipping_min > 0 && `, free above RM${zone.free_shipping_min.toFixed(2)}`}
+                            </span>
+                          </span>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">RM</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              className="w-32 pl-8 pr-2 py-2 border border-gray-200 rounded-lg text-sm"
+                              placeholder="Normal rate"
+                              value={hasRate ? rate : ""}
+                              onChange={(e) => {
+                                const next = { ...(editing.shipping_rates || {}) };
+                                const typed = e.target.value.trim();
+                                // An emptied box means "no longer special", not
+                                // free — writing 0 there would ship it for
+                                // nothing by accident.
+                                if (typed === "") delete next[zone.id];
+                                else next[zone.id] = Math.max(0, parseFloat(typed) || 0);
+                                setEditing({ ...editing, shipping_rates: next });
+                              }}
+                            />
+                          </div>
+                          <span className="w-16 text-xs text-gray-500">
+                            {hasRate ? (rate === 0 ? "Free" : "Special") : "Normal"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Variations (Size + Price) */}
