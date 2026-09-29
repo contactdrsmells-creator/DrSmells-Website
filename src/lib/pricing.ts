@@ -94,6 +94,14 @@ export function hasUnmatchedCombo(product: PriceableProduct, selectedSize: strin
   const selections = parseComboSelections(selectedSize);
   if (!selections) return false;
 
+  // A variation of this exact name prices the line itself, so resolveUnitPrice
+  // returns that price rather than the base price and there is nothing to
+  // refuse. This matters because a variation may be named with a colon in it —
+  // "配套 A : 除臭霜 x1, 磨砂膏 x1" reads as a combination selection to the
+  // parser above, and the group-buy packages were refused at checkout as
+  // mispriced when in fact each one carries its own price.
+  if ((product.variations || []).some((v) => v.name === selectedSize)) return false;
+
   return !combos.some((c) =>
     Object.keys(selections).every((key) => c.selections?.[key] === selections[key]),
   );
