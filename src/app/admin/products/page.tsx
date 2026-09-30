@@ -666,9 +666,26 @@ export default function AdminProducts() {
                 {/* Combo Pricing Table */}
                 {varCombos.length > 0 && (
                   <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-600 mb-2">
-                      Combination Pricing ({varCombos.length} combos)
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-medium text-gray-600">
+                        Combination Pricing ({varCombos.length} combos)
+                      </label>
+                      {/* Combinations outlive the attribute groups that made
+                          them. A product rebuilt around simple packages was
+                          left holding three priced at zero, which the shop
+                          then read in preference to the real prices. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Remove all ${varCombos.length} combination prices? The variations above are not affected.`)) {
+                            setVarCombos([]);
+                          }
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                      >
+                        Remove all
+                      </button>
+                    </div>
                     <div className="space-y-1.5 max-h-60 overflow-y-auto">
                       {varCombos.map((combo, cIdx) => (
                         <div key={cIdx} className="flex gap-2 items-center bg-white p-2 rounded-lg border border-gray-100 text-xs">
@@ -735,6 +752,14 @@ export default function AdminProducts() {
                             />
                             Stock
                           </label>
+                          <button
+                            type="button"
+                            onClick={() => setVarCombos(varCombos.filter((_, i) => i !== cIdx))}
+                            title="Remove this combination"
+                            className="text-red-400 hover:text-red-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
