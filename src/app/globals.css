@@ -47,6 +47,16 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  /*
+   * Scrolling a long page with a thumb lands a lot of quick taps, and two of
+   * them close together are a double-tap — which zooms the page in and leaves
+   * it there. The shop then slides left and right under the finger with no way
+   * back to centre, because nothing restores the scale afterwards.
+   *
+   * "manipulation" keeps panning and pinch-to-zoom and drops only the
+   * double-tap gesture, so a customer can still pinch into a product photo.
+   */
+  touch-action: manipulation;
 }
 
 /*
