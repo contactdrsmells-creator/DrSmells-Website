@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AutoVideo from "@/components/AutoVideo";
@@ -52,6 +52,8 @@ export default function ProductPage() {
   // held separately from the number the rest of the page prices off.
   const [quantityText, setQuantityText] = useState("1");
   const [activeImage, setActiveImage] = useState(0);
+  /** Where a finger landed, to tell a swipe from a scroll when it lifts. */
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [purchaseType, setPurchaseType] = useState<"onetime" | "subscribe">("onetime");
   const [selectedInterval, setSelectedInterval] = useState<number>(1);
   const addItem = useCartStore((s) => s.addItem);
@@ -242,6 +244,11 @@ export default function ProductPage() {
     setQuantityText(String(next));
   };
   const allImages = product.images?.length > 0 ? product.images : (product.image_url ? [product.image_url] : []);
+  /** Moves one picture along, wrapping round at either end. */
+  const stepImage = (delta: number) => {
+    if (allImages.length < 2) return;
+    setActiveImage((i) => (i + delta + allImages.length) % allImages.length);
+  };
 
   // Get page sections from product data
   const sections: ProductPageSections = product.page_sections || {};
@@ -260,7 +267,26 @@ export default function ProductPage() {
                 campaign poster — the one image where filling the screen is the
                 whole point. Capped so an unusually long graphic still leaves
                 the price and buttons within reach of a thumb. */}
-            <div className="relative bg-white rounded-2xl flex items-center justify-center overflow-hidden mb-3 min-h-[280px]">
+            <div
+              className="relative bg-white rounded-2xl flex items-center justify-center overflow-hidden mb-3 min-h-[280px] select-none [touch-action:pan-y_pinch-zoom]"
+              onTouchStart={(e) => {
+                const t = e.touches[0];
+                touchStart.current = { x: t.clientX, y: t.clientY };
+              }}
+              onTouchEnd={(e) => {
+                const from = touchStart.current;
+                touchStart.current = null;
+                if (!from) return;
+                const t = e.changedTouches[0];
+                const dx = t.clientX - from.x;
+                const dy = t.clientY - from.y;
+                // Only a deliberate sideways movement turns the page. Reading
+                // down the page drags a finger across the picture constantly,
+                // and every one of those would otherwise change the image.
+                if (Math.abs(dx) < 45 || Math.abs(dx) <= Math.abs(dy)) return;
+                stepImage(dx < 0 ? 1 : -1);
+              }}
+            >
               {allImages.length > 0 ? (
                 <img
                   src={allImages[activeImage]}
@@ -279,13 +305,13 @@ export default function ProductPage() {
               {allImages.length > 1 && (
                 <>
                   <button
-                    onClick={() => setActiveImage(activeImage === 0 ? allImages.length - 1 : activeImage - 1)}
+                    onClick={() => stepImage(-1)}
                     className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
                   >
                     <ChevronLeft className="w-5 h-5 text-olive" />
                   </button>
                   <button
-                    onClick={() => setActiveImage(activeImage === allImages.length - 1 ? 0 : activeImage + 1)}
+                    onClick={() => stepImage(1)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
                   >
                     <ChevronRight className="w-5 h-5 text-olive" />
