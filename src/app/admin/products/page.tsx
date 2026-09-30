@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Product, ProductPageSections, ProductVariation, VariationAttribute, VariationCombo, SubscriptionOption } from "@/lib/types";
 import { sampleProducts } from "@/lib/sample-data";
 import { supabase } from "@/lib/supabase/client";
-import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, GripVertical, Copy, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Upload, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, GripVertical, Copy, Download } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 import { createRecord, deleteRecord, updateRecord } from "@/lib/admin-content";
 import type { ShippingZone } from "@/lib/shipping";
@@ -142,12 +142,24 @@ export default function AdminProducts() {
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
-  function handleDragStart(idx: number) {
+  function handleDragStart(e: React.DragEvent, idx: number) {
     setDragIdx(idx);
+    // A drag that carries no data never starts in some browsers, and the
+    // pictures simply refused to move. The index is what is being carried,
+    // though the reordering below reads it from state.
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", String(idx));
+    } catch {
+      // Safari objects to setData in some drag sources; the drag still runs.
+    }
   }
 
   function handleDragOver(e: React.DragEvent, idx: number) {
+    // Without this the drop is refused and the browser shows the "no entry"
+    // cursor over every square.
     e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
     if (dragIdx === null || dragIdx === idx || !editing) return;
     const imgs = [...(editing.images || [])];
     const dragged = imgs[dragIdx];
@@ -157,8 +169,25 @@ export default function AdminProducts() {
     setDragIdx(idx);
   }
 
+  function handleDrop(e: React.DragEvent) {
+    // The order was already applied as the picture was dragged across; this
+    // only stops the browser treating the drop as a navigation to the image.
+    e.preventDefault();
+    setDragIdx(null);
+  }
+
   function handleDragEnd() {
     setDragIdx(null);
+  }
+
+  /** Moves a picture one place along, for when a drag is awkward. */
+  function moveImage(idx: number, delta: number) {
+    if (!editing) return;
+    const imgs = [...(editing.images || [])];
+    const to = idx + delta;
+    if (to < 0 || to >= imgs.length) return;
+    [imgs[idx], imgs[to]] = [imgs[to], imgs[idx]];
+    setEditing({ ...editing, images: imgs, image_url: imgs[0] });
   }
 
   async function handleSectionFileUpload(field: string, accept: string, e: React.ChangeEvent<HTMLInputElement>) {
@@ -751,12 +780,35 @@ export default function AdminProducts() {
                       key={idx}
                       className={`relative group cursor-grab active:cursor-grabbing ${dragIdx === idx ? "opacity-50" : ""}`}
                       draggable
-                      onDragStart={() => handleDragStart(idx)}
+                      onDragStart={(e) => handleDragStart(e, idx)}
                       onDragOver={(e) => handleDragOver(e, idx)}
+                      onDrop={handleDrop}
                       onDragEnd={handleDragEnd}
                     >
                       <img src={url} alt="" className={`w-full aspect-square object-cover rounded-lg border-2 ${idx === 0 ? "border-olive" : "border-transparent"}`} />
                       {idx === 0 && <span className="absolute top-1 left-1 bg-olive text-white text-[10px] px-1.5 py-0.5 rounded font-medium">Cover</span>}
+                      {/* A dragged picture can be fiddly to land in the right
+                          square; these shift it one place at a time. */}
+                      <div className="absolute bottom-1 left-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => moveImage(idx, -1)}
+                          disabled={idx === 0}
+                          title="Move earlier"
+                          className="w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 disabled:opacity-30"
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveImage(idx, 1)}
+                          disabled={idx === (editing.images || []).length - 1}
+                          title="Move later"
+                          className="w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 disabled:opacity-30"
+                        >
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
                       <button type="button" onClick={() => removeImage(idx)} className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
                       {/* The stored file itself, not the resized copy the page
                           displays — this is the original that was uploaded. */}
@@ -775,7 +827,7 @@ export default function AdminProducts() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mb-2">Drag images to reorder. First image is the cover.</p>
+                <p className="text-xs text-gray-400 mb-2">Drag images to reorder, or use the arrows. First image is the cover.</p>
                 <label className="flex items-center justify-center gap-2 px-3 py-2.5 bg-olive text-white rounded-lg text-sm font-medium cursor-pointer hover:bg-sage-dark transition-colors">
                   <Upload className="w-4 h-4" />
                   {uploading ? "Uploading..." : "Add Image"}
