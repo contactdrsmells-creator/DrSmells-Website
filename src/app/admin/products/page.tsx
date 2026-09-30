@@ -1059,7 +1059,18 @@ export default function AdminProducts() {
                     // the base price, so showing product.price here listed every
                     // bundle at RM49.90 regardless of what it actually sells for.
                     // Mirrors how the storefront displays a range.
-                    const comboPrices = (product.variation_combos || []).map((c) => c.sale_price ?? c.price);
+                    //
+                    // Combination prices only count when the product actually
+                    // sells that way — the storefront offers them only once
+                    // there are two attributes to combine. A product that has
+                    // since been rebuilt around plain variations can be left
+                    // holding combinations priced at zero, and reading those
+                    // listed a RM167 campaign at RM0.00.
+                    const varAttrs = product.variation_attributes || [];
+                    const pricesByCombo = varAttrs.length >= 2;
+                    const comboPrices = pricesByCombo
+                      ? (product.variation_combos || []).map((c) => c.sale_price ?? c.price)
+                      : [];
                     if (comboPrices.length > 0) {
                       const min = Math.min(...comboPrices);
                       const max = Math.max(...comboPrices);
