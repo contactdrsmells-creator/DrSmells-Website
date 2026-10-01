@@ -13,6 +13,13 @@ interface UploadedImage {
 
 const imageSlots = [
   {
+    id: "logo",
+    label: "Site Logo (Header)",
+    desc: "Shown in the header in place of the words \"Dr.Smells\". Use a PNG with a transparent background; it is scaled to the header height, so a wide image is fine.",
+    folder: "images",
+    target: "logo",
+  },
+  {
     id: "collage-product",
     label: "Product Collage (Main)",
     desc: "Large product image for the homepage collage section",

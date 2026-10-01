@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShoppingBag, Menu, X, ChevronDown, User } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import PromoMenuItem from "./PromoMenuItem";
@@ -10,11 +10,24 @@ import Cart from "./Cart";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  /**
+   * The brand mark, uploaded under Site Images. Until one is set — or while
+   * the settings are still arriving — the name is drawn as text, so the header
+   * is never momentarily empty.
+   */
+  const [logo, setLogo] = useState<string | null>(null);
   const [shopDropdown, setShopDropdown] = useState(false);
   const [aboutDropdown, setAboutDropdown] = useState(false);
   const totalItems = useCartStore((s) => s.totalItems());
   const toggleCart = useCartStore((s) => s.toggleCart);
   const isCartOpen = useCartStore((s) => s.isOpen);
+
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((d) => setLogo(d?.site_images?.logo || null))
+      .catch(() => {});
+  }, []);
 
   // Close dropdowns when clicking outside
   const closeDropdowns = () => { setShopDropdown(false); setAboutDropdown(false); };
@@ -40,9 +53,17 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
             <Link href="/" className="flex-shrink-0">
-              <span className="text-2xl md:text-3xl font-bold text-olive">
-                Dr.Smells
-              </span>
+              {logo ? (
+                <img
+                  src={logo}
+                  alt="Dr.Smells"
+                  className="h-9 md:h-11 w-auto object-contain"
+                />
+              ) : (
+                <span className="text-2xl md:text-3xl font-bold text-olive">
+                  Dr.Smells
+                </span>
+              )}
             </Link>
 
             {/* Desktop Nav */}
