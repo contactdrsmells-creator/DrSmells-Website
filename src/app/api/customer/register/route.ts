@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import {
   CUSTOMER_COOKIE, CUSTOMER_MAX_AGE, cookieOptions, createCustomerToken,
-  hashPassword, normalisePhone, supabaseAdmin,
+  hashPassword, normalisePhone, sessionsAreConfigured, supabaseAdmin,
 } from "@/lib/customer-auth";
 import { getRules } from "@/lib/points";
 
@@ -18,6 +18,16 @@ export async function POST(request: Request) {
   const phone = normalisePhone(body.phone || "");
   const password = String(body.password || "");
   const name = String(body.name || "").trim().slice(0, 80);
+
+  // Checked first: signing the session is the last step, and a failure there
+  // used to leave a customer row behind that nobody could ever log in to.
+  if (!sessionsAreConfigured()) {
+    console.error("[Customer] CUSTOMER_SESSION_SECRET is not set — refusing to register");
+    return Response.json(
+      { error: "Accounts are not switched on yet. Please contact us." },
+      { status: 503 },
+    );
+  }
 
   if (!phone) return Response.json({ error: "Please enter a valid mobile number" }, { status: 400 });
   if (password.length < 6) {

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import {
   CUSTOMER_COOKIE, CUSTOMER_MAX_AGE, cookieOptions, createCustomerToken,
-  normalisePhone, supabaseAdmin, verifyPassword,
+  normalisePhone, sessionsAreConfigured, supabaseAdmin, verifyPassword,
 } from "@/lib/customer-auth";
 
 /** How many wrong passwords before the account rests, and for how long. */
@@ -10,6 +10,14 @@ const LOCK_MINUTES = 15;
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
+  if (!sessionsAreConfigured()) {
+    console.error("[Customer] CUSTOMER_SESSION_SECRET is not set — refusing to log in");
+    return Response.json(
+      { error: "Accounts are not switched on yet. Please contact us." },
+      { status: 503 },
+    );
+  }
+
   const phone = normalisePhone(body.phone || "");
   const password = String(body.password || "");
   if (!phone || !password) {

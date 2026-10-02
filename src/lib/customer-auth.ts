@@ -21,14 +21,35 @@ export interface CustomerSession {
   name: string | null;
 }
 
-function sessionSecret(): string {
-  const secret = process.env.CUSTOMER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET;
+/**
+ * ADMIN_PASSWORD is in the chain because the admin sessions already fall back
+ * to it, and a deployment that has only ever set that one would otherwise sign
+ * nobody in: the first customer to register got a blank 500 after their row
+ * had already been written, leaving an account they could not reach.
+ *
+ * Set CUSTOMER_SESSION_SECRET to its own random value — sharing a secret
+ * between the shop's sessions and the admin's is a bootstrap, not a plan.
+ */
+function sessionSecret(): string | null {
+  return process.env.CUSTOMER_SESSION_SECRET
+    || process.env.ADMIN_SESSION_SECRET
+    || process.env.ADMIN_PASSWORD
+    || null;
+}
+
+/** Checked before anything is written, so a failure cannot leave a half-made account. */
+export function sessionsAreConfigured(): boolean {
+  return Boolean(sessionSecret());
+}
+
+function requireSecret(): string {
+  const secret = sessionSecret();
   if (!secret) throw new Error("CUSTOMER_SESSION_SECRET is not configured");
   return secret;
 }
 
 function sign(payload: string): string {
-  return createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  return createHmac("sha256", requireSecret()).update(payload).digest("base64url");
 }
 
 export function createCustomerToken(session: CustomerSession): string {
@@ -54,6 +75,7 @@ function verifyToken(token: string | undefined): (CustomerSession & { exp: numbe
 }
 
 export async function getCustomerSession(): Promise<CustomerSession | null> {
+  if (!sessionsAreConfigured()) return null;
   const store = await cookies();
   const verified = verifyToken(store.get(COOKIE)?.value);
   if (!verified) return null;
