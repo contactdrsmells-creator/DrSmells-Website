@@ -3,24 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  LayoutDashboard,
-  Package,
-  ImageIcon,
-  MessageSquare,
-  Settings,
-  Star,
-  HelpCircle,
-  ArrowLeft,
-  LogOut,
-  Upload,
-  ShoppingCart,
-  CreditCard,
-  MessageCircle,
-  Truck,
-  Ticket,
-  Shield,
-} from "lucide-react";
+import { LayoutDashboard, Package, ImageIcon, MessageSquare, Settings, Star, HelpCircle, ArrowLeft, LogOut, Upload, ShoppingCart, CreditCard, MessageCircle, Truck, Ticket, Shield, Gift } from "lucide-react";
 import { AdminRole, ROLE_LABELS, hasPermission } from "@/lib/admin-roles";
 
 /**
@@ -37,6 +20,7 @@ const navItems = [
   { href: "/admin/orders", icon: ShoppingCart, label: "Orders", permission: "orders.view" },
   { href: "/admin/payment", icon: CreditCard, label: "Payment", permission: "settings.manage" },
   { href: "/admin/shipping", icon: Truck, label: "Shipping", permission: "settings.manage" },
+  { href: "/admin/points", icon: Gift, label: "Points", permission: "settings.manage" },
   { href: "/admin/vouchers", icon: Ticket, label: "Vouchers", permission: "settings.manage" },
   { href: "/admin/automation", icon: MessageCircle, label: "WhatsApp", permission: "settings.manage" },
   { href: "/admin/settings", icon: Settings, label: "Site Settings", permission: "settings.manage" },

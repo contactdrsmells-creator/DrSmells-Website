@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Loader2, Package } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, Loader2, Package, Gift } from "lucide-react";
 import Link from "next/link";
 
 export default function AccountPage() {
@@ -15,6 +15,41 @@ export default function AccountPage() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  /**
+   * The signed-in half of this page. It stays null for a guest, who still gets
+   * the order tracker below — looking up one order should never require an
+   * account.
+   */
+  const [me, setMe] = useState<{
+    customer: { name: string | null; phone: string };
+    balance: number;
+    value: number;
+    history: { delta: number; reason: string; order_number: string | null; created_at: string }[];
+    rules: { min_redeem: number; points_per_ringgit: number };
+  } | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/customer/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setMe(d?.customer ? d : null))
+      .catch(() => {})
+      .finally(() => setMeLoading(false));
+  }, []);
+
+  async function logout() {
+    await fetch("/api/customer/logout", { method: "POST" });
+    setMe(null);
+  }
+
+  const reasonLabel: Record<string, string> = {
+    order: "Earned from order",
+    signup: "Welcome bonus",
+    redeemed: "Redeemed at checkout",
+    reversed: "Order cancelled",
+    manual: "Adjusted by Dr.Smells",
+  };
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +77,63 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-xl mx-auto px-4 py-16">
+        {!meLoading && !me && (
+          <div className="mb-8 rounded-xl border border-olive/15 p-5 text-center">
+            <Gift className="w-8 h-8 text-olive mx-auto mb-2" />
+            <p className="text-sm text-olive/70 mb-3">
+              Log in to collect points on everything you buy.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block px-5 py-2.5 bg-olive text-cream rounded-lg text-sm font-semibold hover:bg-sage-dark transition-colors"
+            >
+              Log in or create an account
+            </Link>
+          </div>
+        )}
+
+        {me && (
+          <div className="mb-10">
+            <div className="rounded-xl bg-olive text-cream p-6 mb-4">
+              <p className="text-xs uppercase tracking-wide opacity-70">
+                {me.customer.name || me.customer.phone}
+              </p>
+              <p className="text-4xl font-bold mt-1">{me.balance.toLocaleString()}</p>
+              <p className="text-sm opacity-80">
+                points · worth RM {me.value.toFixed(2)} off your next order
+              </p>
+              {me.balance < me.rules.min_redeem && (
+                <p className="text-xs opacity-70 mt-2">
+                  {me.rules.min_redeem - me.balance} more points to start redeeming
+                </p>
+              )}
+            </div>
+
+            {me.history.length > 0 && (
+              <div className="rounded-xl border border-olive/15 divide-y divide-olive/10">
+                {me.history.map((row, i) => (
+                  <div key={i} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm text-olive">{reasonLabel[row.reason] || row.reason}</p>
+                      <p className="text-xs text-olive/40">
+                        {new Date(row.created_at).toLocaleDateString()}
+                        {row.order_number ? ` · ${row.order_number}` : ""}
+                      </p>
+                    </div>
+                    <span className={`text-sm font-semibold ${row.delta > 0 ? "text-green-600" : "text-olive/60"}`}>
+                      {row.delta > 0 ? "+" : ""}{row.delta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={logout} className="mt-4 text-sm text-olive/50 hover:text-olive underline">
+              Log out
+            </button>
+          </div>
+        )}
+
         <div className="text-center mb-8">
           <Package className="w-12 h-12 text-olive mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-olive mb-2">Track Your Order</h1>

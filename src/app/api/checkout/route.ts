@@ -6,6 +6,8 @@ import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
 import { findZone, quoteShipping, readShippingRates, type ProductShippingRates, type ShippingZone } from "@/lib/shipping";
+import { getCustomerSession } from "@/lib/customer-auth";
+import { getBalance, getRules, redeemableFor, spendForOrder } from "@/lib/points";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -176,7 +178,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const serverTotal = Math.max(0, verifiedTotal - serverDiscount) + serverShippingCost;
+    // Points are worked out here from the ledger, never taken from the
+    // request: the figure the browser showed was true when the page loaded,
+    // and the same points must not be spendable from two open tabs. A promo
+    // code and points may both apply — points are their own line rather than a
+    // second voucher, since checkout accepts only one code.
+    const session = await getCustomerSession();
+    let pointsUsed = 0;
+    let pointsDiscount = 0;
+    if (session && Number(body.points_used) > 0) {
+      const rules = await getRules(supabase);
+      const balance = await getBalance(supabase, session.id);
+      const afterDiscount = Math.max(0, verifiedTotal - serverDiscount);
+      const allowed = redeemableFor(balance, afterDiscount, rules);
+      pointsUsed = Math.min(Math.floor(Number(body.points_used)), allowed);
+      if (pointsUsed < rules.min_redeem) pointsUsed = 0;
+      pointsDiscount = rules.points_per_ringgit
+        ? Math.round((pointsUsed / rules.points_per_ringgit) * 100) / 100
+        : 0;
+    }
+
+    const serverTotal =
+      Math.max(0, verifiedTotal - serverDiscount - pointsDiscount) + serverShippingCost;
 
     if (Math.abs(serverTotal - total) > 1) {
       return Response.json({ error: "Price mismatch. Please refresh and try again." }, { status: 400 });
@@ -213,6 +236,27 @@ export async function POST(request: Request) {
     // folding this in would mean an unrun migration silently stopped customers
     // from ordering at all.
     await storeMetaAttribution(supabase, orderNumber, meta, request);
+
+    // Written apart from the insert for the same reason as the attribution
+    // above: these columns arrive with a migration, and an unrun one must not
+    // stop anybody ordering. The points are taken only once the order exists,
+    // so a failed order never costs a customer their balance.
+    if (session) {
+      const { error: linkError } = await supabase
+        .from("orders")
+        .update({ customer_id: session.id, points_used: pointsUsed, points_discount: pointsDiscount })
+        .eq("order_number", orderNumber);
+      if (linkError) console.error("[Checkout] Could not link the account:", linkError.message);
+
+      if (pointsUsed > 0) {
+        const spend = await spendForOrder(supabase, {
+          customerId: session.id,
+          orderNumber,
+          points: pointsUsed,
+        });
+        if (spend.error) console.error("[Checkout] Points were not deducted:", spend.error);
+      }
+    }
 
     // Generate payment redirect URL
     let redirect_url = "";

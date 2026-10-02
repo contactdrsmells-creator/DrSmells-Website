@@ -59,6 +59,9 @@ export default function CheckoutPage() {
 
   const [voucherCode, setVoucherCode] = useState("");
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherResult | null>(null);
+  /** The signed-in customer's points, if they have any to spend. */
+  const [points, setPoints] = useState<{ balance: number; min_redeem: number; per_ringgit: number } | null>(null);
+  const [usePoints, setUsePoints] = useState(false);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState("");
 
@@ -100,6 +103,20 @@ export default function CheckoutPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch("/api/customer/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.customer || !d.rules?.enabled) return;
+        setPoints({
+          balance: d.balance,
+          min_redeem: d.rules.min_redeem,
+          per_ringgit: d.rules.points_per_ringgit,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
   if (items.length === 0 && !submitting) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
@@ -125,7 +142,20 @@ export default function CheckoutPage() {
       : Math.min(appliedVoucher.discount_value, totalPrice)
     : 0;
 
-  const orderTotal = Math.max(0, totalPrice - discount) + shippingCost;
+  // Points come off after any voucher and never reduce the order below zero;
+  // the server works the same figure out again from the ledger before taking
+  // payment, so this is only what the customer is shown.
+  const afterVoucher = Math.max(0, totalPrice - discount);
+  const maxPoints = points
+    ? Math.min(points.balance, Math.floor(afterVoucher * points.per_ringgit))
+    : 0;
+  const canUsePoints = Boolean(points && maxPoints >= points.min_redeem);
+  const pointsUsed = usePoints && canUsePoints ? maxPoints : 0;
+  const pointsDiscount = points && pointsUsed
+    ? Math.round((pointsUsed / points.per_ringgit) * 100) / 100
+    : 0;
+
+  const orderTotal = Math.max(0, afterVoucher - pointsDiscount) + shippingCost;
 
   function updateField(field: keyof ShippingAddress, value: string) {
     setShipping((prev) => ({ ...prev, [field]: value }));
@@ -209,6 +239,7 @@ export default function CheckoutPage() {
           shipping_cost: shippingCost,
           discount,
           voucher_code: appliedVoucher?.code || null,
+          points_used: pointsUsed,
           total: orderTotal,
           has_subscription: hasSubscription,
           // Read from stored first-touch attribution. Reading the checkout URL
@@ -554,6 +585,28 @@ export default function CheckoutPage() {
                     <div className="flex justify-between text-sm text-green-600">
                       <span>Discount</span>
                       <span>-RM {discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {canUsePoints && (
+                    <label className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="accent-olive mt-0.5"
+                        checked={usePoints}
+                        onChange={(e) => setUsePoints(e.target.checked)}
+                      />
+                      <span className="text-olive/70">
+                        Use {maxPoints.toLocaleString()} points
+                        <span className="text-green-600 font-medium">
+                          {" "}(−RM {(maxPoints / (points?.per_ringgit || 1)).toFixed(2)})
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                  {pointsDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Points ({pointsUsed.toLocaleString()})</span>
+                      <span>-RM {pointsDiscount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm text-olive/70">
