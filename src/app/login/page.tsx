@@ -13,12 +13,47 @@ import { Loader2 } from "lucide-react";
  */
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "code">("login");
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState("");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  /** Asks for a code, then checks it. Two steps, one screen. */
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const path = codeSent ? "/api/customer/otp/verify" : "/api/customer/otp/request";
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+      if (!codeSent) {
+        setCodeSent(true);
+        setNotice(data.message || "Check WhatsApp for your code.");
+        return;
+      }
+      router.push("/account?set-password=1");
+      router.refresh();
+    } catch {
+      setError("Could not reach the server. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,15 +83,17 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white px-4 py-12">
       <div className="max-w-sm mx-auto">
         <h1 className="text-2xl font-bold text-olive mb-1">
-          {mode === "login" ? "Log in" : "Create an account"}
+          {mode === "code" ? "Log in with WhatsApp" : mode === "login" ? "Log in" : "Create an account"}
         </h1>
         <p className="text-sm text-olive/50 mb-6">
-          {mode === "login"
-            ? "Use the mobile number you order with."
-            : "Earn points on everything you buy."}
+          {mode === "code"
+            ? "We will send a code to your WhatsApp. No password needed."
+            : mode === "login"
+              ? "Use the mobile number you order with."
+              : "Earn points on everything you buy."}
         </p>
 
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={mode === "code" ? submitCode : submit} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-olive/70 mb-1">Mobile number</label>
             <input
@@ -84,19 +121,38 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-olive/70 mb-1">Password</label>
-            <input
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
-            />
-          </div>
+          {mode !== "code" && (
+            <div>
+              <label className="block text-xs font-medium text-olive/70 mb-1">Password</label>
+              <input
+                type="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
+              />
+            </div>
+          )}
 
+          {mode === "code" && codeSent && (
+            <div>
+              <label className="block text-xs font-medium text-olive/70 mb-1">Code from WhatsApp</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                required
+                maxLength={8}
+                className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive tracking-[0.3em] text-lg"
+              />
+            </div>
+          )}
+
+          {notice && <p className="text-sm text-green-700">{notice}</p>}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
@@ -105,18 +161,35 @@ export default function LoginPage() {
             className="w-full py-3 bg-olive text-cream font-semibold rounded-lg hover:bg-sage-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            {mode === "login" ? "Log in" : "Create account"}
+            {mode === "code"
+              ? (codeSent ? "Log in" : "Send code on WhatsApp")
+              : mode === "login" ? "Log in" : "Create account"}
           </button>
         </form>
 
-        <button
-          onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-          className="w-full mt-4 text-sm text-olive/60 hover:text-olive underline"
-        >
-          {mode === "login"
-            ? "No account yet? Create one"
-            : "Already have an account? Log in"}
-        </button>
+        <div className="mt-4 space-y-2 text-center">
+          {mode === "login" && (
+            <button
+              onClick={() => { setMode("code"); setError(""); setNotice(""); setCodeSent(false); }}
+              className="block w-full text-sm text-olive/60 hover:text-olive underline"
+            >
+              Forgot your password? Log in with WhatsApp
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setMode(mode === "register" ? "login" : mode === "code" ? "login" : "register");
+              setError(""); setNotice(""); setCodeSent(false);
+            }}
+            className="block w-full text-sm text-olive/60 hover:text-olive underline"
+          >
+            {mode === "login"
+              ? "No account yet? Create one"
+              : mode === "code"
+                ? "Use my password instead"
+                : "Already have an account? Log in"}
+          </button>
+        </div>
       </div>
     </div>
   );

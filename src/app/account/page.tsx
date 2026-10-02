@@ -38,6 +38,37 @@ export default function AccountPage() {
       .finally(() => setMeLoading(false));
   }, []);
 
+  /**
+   * Opened straight away when a customer arrives from the WhatsApp code, which
+   * is the one moment they are certain to be here to set a password.
+   */
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordMsg, setPasswordMsg] = useState("");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("set-password")) {
+      setShowPassword(true);
+    }
+  }, []);
+
+  async function savePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordMsg("");
+    const res = await fetch("/api/customer/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setPasswordMsg("Password saved. You can use it next time you log in.");
+      setNewPassword("");
+    } else {
+      setPasswordMsg(data.error || "Could not save the password");
+    }
+  }
+
   async function logout() {
     await fetch("/api/customer/logout", { method: "POST" });
     setMe(null);
@@ -126,6 +157,40 @@ export default function AccountPage() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {showPassword ? (
+              <form onSubmit={savePassword} className="mt-4 rounded-xl border border-olive/15 p-4">
+                <label className="block text-xs font-medium text-olive/70 mb-1">
+                  Set a new password
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={6}
+                    required
+                    placeholder="At least 6 characters"
+                    className="flex-1 px-3 py-2 border border-olive/20 rounded-lg text-olive"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-olive text-cream rounded-lg text-sm font-semibold hover:bg-sage-dark"
+                  >
+                    Save
+                  </button>
+                </div>
+                {passwordMsg && <p className="text-xs text-olive/70 mt-2">{passwordMsg}</p>}
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowPassword(true)}
+                className="mt-4 mr-4 text-sm text-olive/50 hover:text-olive underline"
+              >
+                Change password
+              </button>
             )}
 
             <button onClick={logout} className="mt-4 text-sm text-olive/50 hover:text-olive underline">
