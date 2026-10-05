@@ -8,7 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, Loader2, X, Tag } from "lucide-react";
 import { resolveUnitPrice } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/components/MetaPixel";
-import { getOrderSource, getMetaTrackingData } from "@/lib/attribution";
+import { getOrderSource, getMetaTrackingData, readAttribution } from "@/lib/attribution";
 import { findZone, quoteShipping, type ShippingZone } from "@/lib/shipping";
 
 const MALAYSIAN_STATES = [
@@ -250,6 +250,11 @@ export default function CheckoutPage() {
           // API can attribute the sale whenever payment actually confirms —
           // which for FPX is often after this browser has closed.
           meta: getMetaTrackingData(),
+          // Which advert brought them, for the CRM's Paid Ad fields.
+          ad: {
+            ad_id: readAttribution()?.ad_id,
+            ad_name: readAttribution()?.ad_name,
+          },
         }),
       });
 

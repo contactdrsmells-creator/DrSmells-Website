@@ -32,8 +32,12 @@ async function storeMetaAttribution(
   orderNumber: string,
   meta: unknown,
   request: Request,
+  ad?: unknown,
 ): Promise<void> {
   const clickIds = (meta ?? {}) as { fbc?: unknown; fbp?: unknown };
+  const advert = (ad ?? {}) as { ad_id?: unknown; ad_name?: unknown };
+  const text = (v: unknown) =>
+    typeof v === "string" && v.trim() && !/[{}]/.test(v) ? v.trim().slice(0, 120) : undefined;
 
   // Vercel puts the client first in x-forwarded-for; later entries are proxies.
   const forwarded = request.headers.get("x-forwarded-for") || "";
@@ -46,6 +50,11 @@ async function storeMetaAttribution(
     client_ip_address: clientIp,
     client_user_agent: request.headers.get("user-agent") || undefined,
     event_source_url: `${origin}/checkout`,
+    // Which advert the visit came from, carried here rather than in columns of
+    // its own: this row already exists for exactly this purpose, and the CRM
+    // reads the ad details straight out of it.
+    ad_id: text(advert.ad_id),
+    ad_name: text(advert.ad_name),
   };
 
   const { error } = await supabase
@@ -61,7 +70,7 @@ async function storeMetaAttribution(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription, voucher_free_shipping, meta } = body;
+    const { items, shipping, payment_method, subtotal, shipping_cost, discount, voucher_code, total, source, has_subscription, voucher_free_shipping, meta, ad } = body;
 
     if (!items?.length || !shipping?.name || !shipping?.email || !shipping?.phone) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
@@ -235,7 +244,7 @@ export async function POST(request: Request) {
     // above: Postgres rejects the whole statement if the column is missing, so
     // folding this in would mean an unrun migration silently stopped customers
     // from ordering at all.
-    await storeMetaAttribution(supabase, orderNumber, meta, request);
+    await storeMetaAttribution(supabase, orderNumber, meta, request, ad);
 
     // Written apart from the insert for the same reason as the attribution
     // above: these columns arrive with a migration, and an unrun one must not

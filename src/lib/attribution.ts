@@ -21,6 +21,14 @@ export interface Attribution {
   captured_at: number;
   /** Meta's ad click id, kept so the Conversions API can match the sale to the ad. */
   fbclid?: string;
+  /**
+   * Which advert the visit came from, when the ad's link carries Meta's own
+   * URL macros. A chat order knows this because the chatbot is told it; a
+   * website order has only what the link brought with it, so these stay empty
+   * on any campaign whose URL has not been tagged.
+   */
+  ad_id?: string;
+  ad_name?: string;
 }
 
 /** Referrers worth naming; anything else falls back to its hostname. */
@@ -78,6 +86,18 @@ function resolveSource(params: URLSearchParams, referrer: string): string | null
  * the ad that introduced the customer is more meaningful than whatever tab they
  * happened to return through.
  */
+/**
+ * A URL parameter, unless Meta left its own macro in place.
+ *
+ * An untagged or wrongly spelled macro arrives literally as "{{ad.id}}", and
+ * storing that would fill the CRM with text that looks like data.
+ */
+function tagged(params: URLSearchParams, key: string): string | undefined {
+  const value = params.get(key);
+  if (!value || isUnsubstituted(value)) return undefined;
+  return value.slice(0, 120);
+}
+
 export function captureAttribution(): void {
   if (typeof window === "undefined") return;
 
@@ -99,6 +119,10 @@ export function captureAttribution(): void {
       landing_page: window.location.pathname,
       captured_at: Date.now(),
       fbclid: params.get("fbclid") || existing?.fbclid,
+      ad_id: tagged(params, "ad_id") || existing?.ad_id,
+      // The campaign is the name the owner reads in the CRM; the ad's own name
+      // is better still when the link carries it.
+      ad_name: tagged(params, "ad_name") || params.get("utm_campaign") || existing?.ad_name,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(attribution));

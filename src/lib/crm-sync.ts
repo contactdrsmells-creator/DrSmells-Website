@@ -55,6 +55,11 @@ export async function syncOrderToCRM(orderNumber: string) {
     // "Sales by" column, which is otherwise empty for website orders since no
     // staff member handled them.
     source: order.source || "Direct",
+    // The advert this sale came from, so a website order shows the same Paid
+    // Ad details in the CRM as one taken over chat. Empty unless the ad's link
+    // carried Meta's URL macros.
+    ad_name: order.meta_attribution?.ad_name || undefined,
+    ad_id: order.meta_attribution?.ad_id || undefined,
     notes: `Website Order #${orderNumber} | Payment: ${order.payment_method} | Ref: ${order.payment_reference || "N/A"}`,
     order_items: items.map((i: { product_name: string; variation?: string; quantity: number }) => ({
       product: i.variation ? `${i.product_name} (${i.variation})` : i.product_name,
