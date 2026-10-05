@@ -120,9 +120,11 @@ export function captureAttribution(): void {
       captured_at: Date.now(),
       fbclid: params.get("fbclid") || existing?.fbclid,
       ad_id: tagged(params, "ad_id") || existing?.ad_id,
-      // The campaign is the name the owner reads in the CRM; the ad's own name
-      // is better still when the link carries it.
-      ad_name: tagged(params, "ad_name") || params.get("utm_campaign") || existing?.ad_name,
+      // The individual creative's name, never the campaign's. They are
+      // different things, and a column holding sometimes one and sometimes the
+      // other cannot be read with any confidence — so an untagged ad leaves
+      // this empty rather than filling it with the campaign it sat in.
+      ad_name: tagged(params, "ad_name") || existing?.ad_name,
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(attribution));
