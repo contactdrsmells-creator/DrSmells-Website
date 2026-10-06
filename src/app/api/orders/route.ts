@@ -1,5 +1,6 @@
 import { requirePermission } from "@/lib/admin-auth";
 import { createClient } from "@supabase/supabase-js";
+import { readAll } from "@/lib/paged";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -44,16 +45,22 @@ export async function GET(request: Request) {
   const auth = await requirePermission("orders.view");
   if (auth instanceof Response) return auth;
 
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  // Read a page at a time: asking for everything returns at most a thousand
+  // rows, and says nothing about the rest. The admin list would quietly stop
+  // at the oldest thousand as the shop grows.
+  try {
+    const orders = await readAll(
+      (from, to) => supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, to),
+      { what: "orders" },
+    );
+    return Response.json({ orders });
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
   }
-
-  return Response.json({ orders: data || [] });
 }
 
 // POST: create test order (admin only) — for testing CRM integration

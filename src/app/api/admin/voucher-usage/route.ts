@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { requirePermission } from "@/lib/admin-auth";
+import { readAll } from "@/lib/paged";
 
 /**
  * What a voucher has actually earned, counted from paid orders.
@@ -45,21 +46,29 @@ export async function GET(request: Request) {
   const code = new URL(request.url).searchParams.get("code");
   const supabase = getSupabase();
 
-  let query = supabase
-    .from("orders")
-    .select("order_number, total, discount, voucher_code, payment_status, created_at, shipping")
-    .eq("payment_status", "paid")
-    .not("voucher_code", "is", null)
-    .order("created_at", { ascending: false });
+  // A thousand was a deliberate cap rather than an oversight, but it behaves
+  // exactly like the accidental ones the moment it is crossed: a silently
+  // short answer that still adds up. Read every page instead.
+  const page = (from: number, to: number) => {
+    let query = supabase
+      .from("orders")
+      .select("order_number, total, discount, voucher_code, payment_status, created_at, shipping")
+      .eq("payment_status", "paid")
+      .not("voucher_code", "is", null)
+      .order("created_at", { ascending: false });
 
-  // Matched case-insensitively: a voucher typed in lower case at checkout is
-  // still the same voucher.
-  if (code) query = query.ilike("voucher_code", code);
+    // Matched case-insensitively: a voucher typed in lower case at checkout is
+    // still the same voucher.
+    if (code) query = query.ilike("voucher_code", code);
+    return query.range(from, to);
+  };
 
-  const { data, error } = await query.limit(1000);
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-
-  const rows = (data || []) as OrderRow[];
+  let rows: OrderRow[];
+  try {
+    rows = (await readAll(page, { what: "voucher orders" })) as OrderRow[];
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
+  }
 
   if (!code) {
     // One entry per code for the list screen.
