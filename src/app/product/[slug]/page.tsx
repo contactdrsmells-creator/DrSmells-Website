@@ -39,6 +39,20 @@ function Accordion({ title, children, defaultOpen = false }: { title: string; ch
   );
 }
 
+/**
+ * Whether an address refers to this product.
+ *
+ * A "+" in a web address is read as a space before the page ever sees it, so
+ * the 10.10 set stored as "10.101+1" arrives here as "10.101 1" and matched
+ * nothing. The two characters mean the same thing in an address, so neither
+ * side is trusted to have kept its own: both are reduced to the same shape
+ * before they are compared.
+ */
+function sameSlug(stored: string | undefined, wanted: string): boolean {
+  const flatten = (v: string) => decodeURIComponent(String(v || "")).replace(/\+/g, " ").trim().toLowerCase();
+  return flatten(stored || "") === flatten(wanted);
+}
+
 export default function ProductPage() {
   const params = useParams();
   const slug = params.slug as string;
@@ -80,13 +94,11 @@ export default function ProductPage() {
         supabase.from("site_settings").select("*").eq("key", "site_images"),
       ]);
 
-      // Matched here rather than asked for by slug. A slug goes into the
-      // query string to be asked for, and a "+" means a space there — so the
-      // 10.10 set at "10.101+1" was looked up as "10.101 1", found nothing,
-      // and the page waited for a product that was never coming. Matching
-      // against the list already being fetched cannot be mis-encoded, and is
-      // one request fewer.
-      const found = ((allProductsRes.data || []) as Product[]).find((p) => p.slug === slug) || null;
+      // Matched here rather than asked for by slug: asking puts the slug in a
+      // query string, where a "+" means a space, so the 10.10 set at
+      // "10.101+1" was looked up as "10.101 1" and found nothing. Matching in
+      // memory cannot be mis-encoded, and is one request fewer.
+      const found = ((allProductsRes.data || []) as Product[]).find((p) => sameSlug(p.slug, slug)) || null;
       setProduct(found);
       setNotFound(!found);
 
