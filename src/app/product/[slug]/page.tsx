@@ -43,6 +43,8 @@ export default function ProductPage() {
   const params = useParams();
   const slug = params.slug as string;
   const [product, setProduct] = useState<Product | null>(null);
+  /** Told apart from "still loading", which otherwise looks identical forever. */
+  const [notFound, setNotFound] = useState(false);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [siteImages, setSiteImages] = useState<Record<string, string>>({});
   const [selectedSize, setSelectedSize] = useState("");
@@ -73,20 +75,29 @@ export default function ProductPage() {
         return;
       }
 
-      const [productRes, allProductsRes, siteImagesRes] = await Promise.all([
-        supabase.from("products").select("*").eq("slug", slug).single(),
+      const [allProductsRes, siteImagesRes] = await Promise.all([
         supabase.from("products").select("*").order("sort_order"),
         supabase.from("site_settings").select("*").eq("key", "site_images"),
       ]);
 
-      if (productRes.data) {
-        setProduct(productRes.data as Product);
-        if (productRes.data.sizes?.length) setSelectedSize(productRes.data.sizes[0]);
+      // Matched here rather than asked for by slug. A slug goes into the
+      // query string to be asked for, and a "+" means a space there — so the
+      // 10.10 set at "10.101+1" was looked up as "10.101 1", found nothing,
+      // and the page waited for a product that was never coming. Matching
+      // against the list already being fetched cannot be mis-encoded, and is
+      // one request fewer.
+      const found = ((allProductsRes.data || []) as Product[]).find((p) => p.slug === slug) || null;
+      setProduct(found);
+      setNotFound(!found);
+
+      if (found) {
+        if (found.sizes?.length) setSelectedSize(found.sizes[0]);
         // Use manually selected related products, fallback to other products
-        const relatedIds = productRes.data.related_products || [];
+        const relatedIds = found.related_products || [];
         // A hidden product is not shown here either. Its own page still works —
         // this only stops it being surfaced from somewhere else on the site.
-        const allProds = ((allProductsRes.data || []) as Product[]).filter((p) => p.hidden !== true);
+        const allProds = ((allProductsRes.data || []) as Product[])
+          .filter((p) => p.hidden !== true && p.slug !== slug);
         // Only what was chosen. Filling the space with whatever else was in
         // the shop meant a page with nothing selected still recommended four
         // products — which is not a recommendation, and on a campaign page
@@ -97,11 +108,29 @@ export default function ProductPage() {
       }
       if (siteImagesRes.data?.[0]) setSiteImages(siteImagesRes.data[0].value as Record<string, string>);
     }
+    setNotFound(false);
     load();
     setActiveImage(0);
     setQuantity(1);
     setQuantityText("1");
   }, [slug]);
+
+  if (notFound) {
+    return (
+      <div className="bg-white max-w-7xl mx-auto px-4 py-24 text-center">
+        <h1 className="text-2xl font-bold text-olive mb-2">We couldn&apos;t find that product</h1>
+        <p className="text-olive/60 mb-6">
+          The link may be out of date, or the product may no longer be on sale.
+        </p>
+        <Link
+          href="/shop"
+          className="inline-block px-6 py-3 bg-olive text-cream rounded-lg font-semibold hover:bg-sage-dark transition-colors"
+        >
+          Browse the shop
+        </Link>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
