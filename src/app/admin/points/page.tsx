@@ -51,6 +51,31 @@ export default function AdminPoints() {
     setTimeout(() => setToast(""), 2500);
   }
 
+  /**
+   * For a customer who has forgotten their password. Until WhatsApp codes are
+   * live there is no way for them to get back in on their own.
+   */
+  async function resetPassword(customer: Customer) {
+    if (!confirm(`Give ${customer.name || customer.phone} a new temporary password?\n\nTheir current password stops working immediately.`)) return;
+
+    const res = await fetch("/api/admin/customer-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customer_id: customer.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || "Could not reset the password"); return; }
+
+    // Shown once, because it is stored only as a hash: there is no second
+    // chance to read it, and reopening this screen will not bring it back.
+    window.prompt(
+      `Temporary password for ${data.name || data.phone}.\n\n` +
+      `Copy it now — it cannot be shown again. Ask them to log in with it and ` +
+      `set their own password on the account page.`,
+      data.password,
+    );
+  }
+
   async function adjust(customer: Customer) {
     const raw = prompt(
       `Points to add or take away for ${customer.name || customer.phone}.\n\nUse a minus sign to take points away, e.g. -50.`,
@@ -209,6 +234,12 @@ export default function AdminPoints() {
                       className="text-xs text-olive hover:underline"
                     >
                       Adjust
+                    </button>
+                    <button
+                      onClick={() => resetPassword(c)}
+                      className="text-xs text-olive/60 hover:text-olive hover:underline ml-3"
+                    >
+                      Reset password
                     </button>
                   </td>
                 </tr>
