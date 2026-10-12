@@ -592,6 +592,17 @@ export default function CheckoutPage() {
                       <span>-RM {discount.toFixed(2)}</span>
                     </div>
                   )}
+                  {/* Below the minimum there is nothing to tick, but saying
+                      nothing at all leaves a customer who knows they have
+                      points looking for them. How many, what they are worth,
+                      and how far off they are, in one line. */}
+                  {points && !canUsePoints && points.balance > 0 && (
+                    <p className="text-xs text-olive/50">
+                      You have {points.balance.toLocaleString()} points
+                      {" · "}
+                      {points.min_redeem - points.balance} more to use them
+                    </p>
+                  )}
                   {canUsePoints && (
                     <label className="flex items-start gap-2 text-sm cursor-pointer">
                       <input
