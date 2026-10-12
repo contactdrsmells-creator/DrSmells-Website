@@ -137,13 +137,17 @@ export default function Navbar() {
 
             {/* Right side icons */}
             <div className="flex items-center gap-3 md:gap-4">
-              {/* Shown on mobile too, unlike the account icon: it is the only
-                  way to reach a hidden product without its link. */}
+              {/* The only way to reach a hidden product without its link, so
+                  it is shown at every width. */}
               <SearchBox />
 
+              {/* Shown on a phone as well as a desktop. Nearly every visitor
+                  is on one, and an account reachable only from a desktop is an
+                  account almost nobody finds — with points left uncollected
+                  inside it. */}
               <Link
                 href="/account"
-                className="hidden md:flex text-olive/60 hover:text-olive transition-colors"
+                className="flex text-olive/60 hover:text-olive transition-colors"
               >
                 <User className="w-5 h-5" />
               </Link>
