@@ -9,9 +9,11 @@ import { getBalance } from "@/lib/points";
  * a customer in the CRM should be able to see that they are a member and what
  * they are sitting on, without being asked to look it up in a second place.
  *
- * Behind the same shared secret the two systems already use between them, and
- * answering only about numbers it is asked about — never listing the
- * membership.
+ * Behind the same shared secret the two systems already use between them.
+ * Given a list of numbers it answers about those; asked for all, it lists
+ * every account, which is what lets the CRM show a member who has signed up
+ * and not yet bought anything — someone its own list, built from orders,
+ * cannot know exists.
  */
 
 function secretMatches(provided: string | null, expected: string): boolean {
@@ -30,6 +32,29 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
+
+  // Every account, for a caller building a list rather than annotating one.
+  if (body?.all === true) {
+    const db = supabaseAdmin();
+    const { data: everyone } = await db
+      .from("customers")
+      .select("id, phone, name, created_at")
+      .order("created_at", { ascending: false })
+      .range(0, 999);
+
+    const all = [];
+    for (const customer of everyone || []) {
+      all.push({
+        phone: customer.phone,
+        asked_as: customer.phone,
+        name: customer.name,
+        joined: customer.created_at,
+        points: await getBalance(db, customer.id),
+      });
+    }
+    return Response.json({ results: all });
+  }
+
   const asked: string[] = Array.isArray(body?.phones) ? body.phones.slice(0, 500) : [];
   if (!asked.length) return Response.json({ results: [] });
 
