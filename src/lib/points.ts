@@ -186,3 +186,61 @@ export async function refundForOrder(db: SupabaseClient, orderNumber: string) {
     });
   }
 }
+
+/**
+ * Points for what this customer bought on the shop's other channels.
+ *
+ * An order taken over chat is the same person buying, and lands in the CRM
+ * rather than here. Matched on the mobile number, and only from the day the
+ * account was opened: a number nobody has proved they own must not arrive
+ * carrying a balance.
+ *
+ * Awarding is keyed on the order's id, and a website order carries the same id
+ * in both systems — so an order that reaches here twice, once through the
+ * shop and once through the CRM, is still only paid for once.
+ */
+export async function awardForOtherChannels(
+  db: SupabaseClient,
+  { customerId, phone, since }: { customerId: string; phone: string; since: string },
+): Promise<{ awarded: number; orders: number }> {
+  const url = process.env.CRM_WEBHOOK_URL;
+  const secret = process.env.CRM_WEBHOOK_SECRET;
+  if (!url || !secret) return { awarded: 0, orders: 0 };
+
+  // The orders webhook and this share a host; only the last path segment
+  // differs, so the address is derived rather than configured twice.
+  const endpoint = url.replace(/\/[^/]*$/, "/customer-orders");
+
+  let orders: { order_id: string; amount: number }[] = [];
+  try {
+    const res = await fetch(
+      `${endpoint}?phone=${encodeURIComponent(phone)}&since=${encodeURIComponent(since)}`,
+      { headers: { "x-webhook-secret": secret } },
+    );
+    if (!res.ok) {
+      console.error("[Points] Could not read the CRM's orders:", res.status);
+      return { awarded: 0, orders: 0 };
+    }
+    orders = (await res.json())?.orders || [];
+  } catch (err) {
+    // The account page must still open when the CRM cannot be reached; the
+    // points are simply picked up the next time it does.
+    console.error("[Points] CRM unreachable:", (err as Error).message);
+    return { awarded: 0, orders: 0 };
+  }
+
+  let awarded = 0;
+  let counted = 0;
+  for (const order of orders) {
+    const result = await awardForOrder(db, {
+      customerId,
+      orderNumber: order.order_id,
+      spend: Number(order.amount) || 0,
+    });
+    if (result.awarded) {
+      awarded += result.awarded;
+      counted += 1;
+    }
+  }
+  return { awarded, orders: counted };
+}

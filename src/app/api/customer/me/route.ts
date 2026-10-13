@@ -1,5 +1,5 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
-import { awardForOrder, getBalance, getHistory, getRules } from "@/lib/points";
+import { awardForOrder, awardForOtherChannels, getBalance, getHistory, getRules } from "@/lib/points";
 
 /**
  * The account's own view of itself: who it is, what it has, and why.
@@ -29,6 +29,21 @@ export async function GET() {
       customerId: session.id,
       orderNumber: order.order_number,
       spend: Number(order.total || 0),
+    });
+  }
+
+  // And what they bought over chat, which lands in the CRM rather than here.
+  // Only from the day this account was opened.
+  const { data: profile } = await db
+    .from("customers")
+    .select("created_at")
+    .eq("id", session.id)
+    .maybeSingle();
+  if (profile?.created_at) {
+    await awardForOtherChannels(db, {
+      customerId: session.id,
+      phone: session.phone,
+      since: profile.created_at,
     });
   }
 
