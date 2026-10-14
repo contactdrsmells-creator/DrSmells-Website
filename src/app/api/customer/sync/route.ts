@@ -1,5 +1,6 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
-import { awardForOtherChannels, getBalance } from "@/lib/points";
+import { awardForOtherChannels, getBalance, getLedger, lifetimeEarnedFrom } from "@/lib/points";
+import { getTiers, multiplierFor } from "@/lib/tiers";
 
 /**
  * Points for what this customer bought on the shop's other channels.
@@ -29,10 +30,15 @@ export async function POST() {
     .maybeSingle();
   if (!profile?.created_at) return Response.json({ awarded: 0, orders: 0 });
 
+  // Chat orders earn at the member's tier rate too, or the tier would only
+  // count for half of what they buy.
+  const [ledger, tiers] = await Promise.all([getLedger(db, session.id), getTiers(db)]);
+
   const result = await awardForOtherChannels(db, {
     customerId: session.id,
     phone: session.phone,
     since: profile.created_at,
+    multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
   });
 
   return Response.json({

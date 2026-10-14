@@ -16,6 +16,8 @@ interface Voucher {
   active: boolean;
   applicable_for_subscription: boolean;
   free_shipping: boolean;
+  show_in_account: boolean;
+  description: string | null;
   created_at: string;
 }
 
@@ -30,6 +32,8 @@ const emptyVoucher = {
   active: true,
   applicable_for_subscription: false,
   free_shipping: false,
+  show_in_account: false,
+  description: "",
 };
 
 interface UsageOrder {
@@ -119,6 +123,8 @@ export default function AdminVouchersPage() {
       active: v.active,
       applicable_for_subscription: v.applicable_for_subscription ?? false,
       free_shipping: v.free_shipping ?? false,
+      show_in_account: v.show_in_account ?? false,
+      description: v.description ?? "",
     });
     setShowForm(true);
   }
@@ -342,7 +348,37 @@ export default function AdminVouchersPage() {
                   </label>
                   <span className="text-sm text-gray-700">Free shipping</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.show_in_account}
+                      onChange={(e) => setForm({ ...form, show_in_account: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive"></div>
+                  </label>
+                  <span className="text-sm text-gray-700">Show in member account</span>
+                </div>
               </div>
+
+              {/* A code is a thing of value. Most exist for one person or one
+                  campaign, so a voucher reaches the member area because
+                  somebody ticked the box above, never by default. */}
+              {form.show_in_account && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    What members see this called
+                  </label>
+                  <input
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    placeholder="e.g. Welcome gift for new members"
+                    maxLength={120}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">

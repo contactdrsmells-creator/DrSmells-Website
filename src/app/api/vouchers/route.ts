@@ -44,6 +44,8 @@ export async function POST(request: Request) {
     active: body.active !== false,
     applicable_for_subscription: body.applicable_for_subscription === true,
     free_shipping: body.free_shipping === true,
+    show_in_account: body.show_in_account === true,
+    description: String(body.description || "").trim().slice(0, 120) || null,
   });
 
   if (error) {
@@ -73,6 +75,8 @@ export async function PUT(request: Request) {
       active: body.active !== false,
       applicable_for_subscription: body.applicable_for_subscription === true,
       free_shipping: body.free_shipping === true,
+      show_in_account: body.show_in_account === true,
+      description: String(body.description || "").trim().slice(0, 120) || null,
     })
     .eq("id", body.id);
 

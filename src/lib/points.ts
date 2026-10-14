@@ -43,23 +43,57 @@ export async function getRules(db: SupabaseClient): Promise<PointsRules> {
   return { ...DEFAULT_RULES, ...(data?.value || {}) };
 }
 
+export interface LedgerRow {
+  delta: number;
+  reason: string;
+  expires_at: string | null;
+}
+
+/**
+ * Every row against a customer, read once.
+ *
+ * The balance and the lifetime total are two sums over the same rows, and the
+ * account page needs both — asking twice is a second round trip for figures
+ * already in hand.
+ */
+export async function getLedger(db: SupabaseClient, customerId: string): Promise<LedgerRow[]> {
+  const { data } = await db
+    .from("points_ledger")
+    .select("delta, reason, expires_at")
+    .eq("customer_id", customerId);
+  return (data || []) as LedgerRow[];
+}
+
 /**
  * What a customer has to spend.
  *
  * Expired rows are excluded here rather than deleted, so the history a
  * customer reads still explains where points went.
  */
-export async function getBalance(db: SupabaseClient, customerId: string): Promise<number> {
-  const { data } = await db
-    .from("points_ledger")
-    .select("delta, expires_at")
-    .eq("customer_id", customerId);
-
+export function balanceFrom(rows: LedgerRow[]): number {
   const now = Date.now();
-  return (data || []).reduce((sum, row) => {
+  return rows.reduce((sum, row) => {
     const expired = row.expires_at && new Date(row.expires_at).getTime() < now && row.delta > 0;
     return expired ? sum : sum + Number(row.delta || 0);
   }, 0);
+}
+
+/**
+ * What they have earned by buying, ever.
+ *
+ * Only awards for orders, and expiry is ignored: a tier records what somebody
+ * has bought from us, which letting points lapse does not undo. Spending them
+ * does not undo it either, so redemptions are not subtracted.
+ */
+export function lifetimeEarnedFrom(rows: LedgerRow[]): number {
+  return rows.reduce(
+    (sum, row) => (row.reason === "order" && row.delta > 0 ? sum + Number(row.delta) : sum),
+    0,
+  );
+}
+
+export async function getBalance(db: SupabaseClient, customerId: string): Promise<number> {
+  return balanceFrom(await getLedger(db, customerId));
 }
 
 export async function getHistory(db: SupabaseClient, customerId: string, limit = 50) {
@@ -95,7 +129,16 @@ function expiryFrom(months: number): string | null {
  */
 export async function awardForOrders(
   db: SupabaseClient,
-  { customerId, orders }: { customerId: string; orders: { orderNumber: string; spend: number }[] },
+  {
+    customerId,
+    orders,
+    multiplier = 1,
+  }: {
+    customerId: string;
+    orders: { orderNumber: string; spend: number }[];
+    /** The member tier's earn rate. 1 is the ordinary rate. */
+    multiplier?: number;
+  },
 ): Promise<{ awarded: number; orders: number }> {
   const wanted = orders.filter((o) => o.orderNumber);
   if (!wanted.length) return { awarded: 0, orders: 0 };
@@ -120,7 +163,10 @@ export async function awardForOrders(
     if (seen.has(order.orderNumber)) continue;
     // Marked as we go: the same order number twice in one batch is one award.
     seen.add(order.orderNumber);
-    const points = Math.floor(Math.max(0, order.spend) * rules.earn_per_ringgit);
+    // The tier's multiplier is what makes a tier worth having. A missing or
+    // nonsensical one falls back to the ordinary rate rather than to nothing.
+    const rate = Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+    const points = Math.floor(Math.max(0, order.spend) * rules.earn_per_ringgit * rate);
     if (points <= 0) continue;
     rows.push({
       customer_id: customerId,
@@ -226,7 +272,12 @@ export async function refundForOrder(db: SupabaseClient, orderNumber: string) {
  */
 export async function awardForOtherChannels(
   db: SupabaseClient,
-  { customerId, phone, since }: { customerId: string; phone: string; since: string },
+  {
+    customerId,
+    phone,
+    since,
+    multiplier = 1,
+  }: { customerId: string; phone: string; since: string; multiplier?: number },
 ): Promise<{ awarded: number; orders: number }> {
   const url = process.env.CRM_WEBHOOK_URL;
   const secret = process.env.CRM_WEBHOOK_SECRET;
@@ -256,6 +307,7 @@ export async function awardForOtherChannels(
 
   return awardForOrders(db, {
     customerId,
+    multiplier,
     orders: orders.map((order) => ({
       orderNumber: order.order_id,
       spend: Number(order.amount) || 0,

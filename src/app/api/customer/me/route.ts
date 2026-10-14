@@ -1,5 +1,8 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
-import { awardForOrders, getBalance, getHistory, getRules } from "@/lib/points";
+import {
+  awardForOrders, balanceFrom, getHistory, getLedger, getRules, lifetimeEarnedFrom,
+} from "@/lib/points";
+import { getTiers, standingFor, multiplierFor } from "@/lib/tiers";
 
 /**
  * The account's own view of itself: who it is, what it has, and why.
@@ -23,32 +26,44 @@ export async function GET() {
 
   const db = supabaseAdmin();
 
-  const { data: orders } = await db
-    .from("orders")
-    .select("order_number, status, payment_status, total, items, created_at")
-    .eq("customer_id", session.id)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  // Everything the page needs that does not depend on anything else, at once.
+  const [{ data: orders }, ledger, tiers, rules] = await Promise.all([
+    db
+      .from("orders")
+      .select("order_number, status, payment_status, total, subtotal, shipping_cost, discount, voucher_code, items, shipping, stripe_subscription_id, created_at")
+      .eq("customer_id", session.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    getLedger(db, session.id),
+    getTiers(db),
+    getRules(db),
+  ]);
 
-  await awardForOrders(db, {
+  // The tier is read before awarding, so the rate applied is the one they had
+  // when the order was placed rather than one the award itself just unlocked.
+  const earnedBefore = lifetimeEarnedFrom(ledger);
+  const award = await awardForOrders(db, {
     customerId: session.id,
+    multiplier: multiplierFor(earnedBefore, tiers),
     orders: (orders || [])
       .filter((order) => order.payment_status === "paid")
       .map((order) => ({ orderNumber: order.order_number, spend: Number(order.total || 0) })),
   });
 
-  const [balance, history, rules] = await Promise.all([
-    getBalance(db, session.id),
-    getHistory(db, session.id),
-    getRules(db),
-  ]);
+  // Re-read only when the sweep actually changed something, which it almost
+  // never does — the common case is one query, not two.
+  const rows = award.awarded ? await getLedger(db, session.id) : ledger;
+  const balance = balanceFrom(rows);
+  const standing = standingFor(lifetimeEarnedFrom(rows), tiers);
 
   return Response.json({
     customer: session,
     balance,
     value: rules.points_per_ringgit ? Math.round((balance / rules.points_per_ringgit) * 100) / 100 : 0,
-    history,
+    history: await getHistory(db, session.id),
     rules,
+    tier: standing,
+    tiers,
     orders: orders || [],
   });
 }
