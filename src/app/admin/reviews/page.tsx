@@ -34,7 +34,9 @@ export default function AdminReviews() {
   const [importing, setImporting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   async function loadReviews() {
     const res = await fetch("/api/reviews?all=true");
@@ -58,6 +60,32 @@ export default function AdminReviews() {
   useEffect(() => {
     loadReviews();
   }, []);
+
+  /**
+   * Closes the export menu on a click elsewhere, or on Escape.
+   *
+   * The menu used to open on hover, which meant it closed again the moment the
+   * pointer crossed the few pixels between the button and the menu beneath it
+   * — it could be seen but never reached. Hover also offers nothing to a
+   * phone, where there is no such thing.
+   */
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExportOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("touchstart", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("touchstart", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [exportOpen]);
 
   async function toggleApproved(id: string, approved: boolean) {
     await fetch("/api/reviews", {
@@ -418,29 +446,44 @@ export default function AdminReviews() {
             <Upload className="w-4 h-4" />
             {importing ? "Importing..." : "Import"}
           </button>
-          <div className="relative group">
+          <div className="relative" ref={exportRef}>
             <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-olive text-white hover:bg-olive/90 transition-colors"
+              onClick={() => setExportOpen((open) => !open)}
               disabled={filtered.length === 0}
+              aria-haspopup="menu"
+              aria-expanded={exportOpen}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-olive text-white hover:bg-olive/90 transition-colors disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               Export
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${exportOpen ? "rotate-180" : ""}`}
+              />
             </button>
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden hidden group-hover:block z-10 min-w-[120px]">
-              <button
-                onClick={exportCSV}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            {/* Opened by a click and closed by one elsewhere. It stays put
+                while the pointer travels to it, which a hover menu separated
+                from its button by a gap cannot do, and it works on a phone. */}
+            {exportOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-20 min-w-[160px]"
               >
-                Export as CSV
-              </button>
-              <button
-                onClick={exportJSON}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-100"
-              >
-                Export as JSON
-              </button>
-            </div>
+                <button
+                  role="menuitem"
+                  onClick={() => { setExportOpen(false); exportCSV(); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Export as CSV
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => { setExportOpen(false); exportJSON(); }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-100"
+                >
+                  Export as JSON
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
