@@ -271,9 +271,33 @@ export default function AdminProducts() {
     loadProducts();
   }
 
+  /**
+   * Deleting a product takes its reviews with it.
+   *
+   * The reviews table points at the product and the database is set to cascade,
+   * so removing one product silently destroys every review written about it —
+   * a thousand of them on the best seller — with nothing to recover them from.
+   * Past orders are untouched: they store what was bought as their own copy.
+   *
+   * So the count is read first and said out loud. Hiding is offered in the same
+   * breath, because taking a product off the shop is almost always what someone
+   * deleting it actually wants.
+   */
   async function handleDelete(id: string) {
     if (!isConfigured) return;
-    if (!confirm("Delete this product?")) return;
+
+    let reviewCount = 0;
+    const { count } = await supabase
+      .from("reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", id);
+    reviewCount = count || 0;
+
+    const warning = reviewCount
+      ? `Delete this product?\n\nThis will also permanently delete its ${reviewCount.toLocaleString()} review${reviewCount === 1 ? "" : "s"}. They cannot be recovered.\n\nTo take it off the shop and keep the reviews, cancel and tick "Hidden" instead.`
+      : "Delete this product?\n\nPast orders are not affected.";
+
+    if (!confirm(warning)) return;
     { const { error } = await deleteRecord("products", id); if (error) alert(error.message); }
     showToast("Product deleted");
     loadProducts();
