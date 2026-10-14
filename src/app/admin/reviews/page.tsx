@@ -62,6 +62,24 @@ export default function AdminReviews() {
   }, []);
 
   /**
+   * Reload when this tab is looked at again.
+   *
+   * The list is read once and then only ever changed from this page, so a
+   * review approved in a second tab — or on a phone — left this one showing
+   * counts that had not been true for hours, with no way to tell. Coming back
+   * to the tab is exactly the moment to find out.
+   */
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) loadReviews(); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
+  /**
    * Closes the export menu on a click elsewhere, or on Escape.
    *
    * The menu used to open on hover, which meant it closed again the moment the
@@ -87,31 +105,51 @@ export default function AdminReviews() {
     };
   }, [exportOpen]);
 
-  async function toggleApproved(id: string, approved: boolean) {
-    await fetch("/api/reviews", {
+  /**
+   * Changes one review, and shows what actually happened to it.
+   *
+   * The card used to be redrawn whether or not the request succeeded, so a
+   * request refused — an expired admin session being the likely one — left a
+   * review looking approved on screen and pending in the database. The page
+   * said the job was done and it was not.
+   */
+  async function patchReview(id: string, change: { approved?: boolean; verified?: boolean }) {
+    const before = reviews.find((r) => r.id === id);
+    setReviews((prev) => prev.map((r) => (r.id === id ? { ...r, ...change } : r)));
+
+    const res = await fetch("/api/reviews", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, approved }),
+      body: JSON.stringify({ id, ...change }),
     });
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, approved } : r))
-    );
+
+    if (!res.ok) {
+      // Put it back the way it was, and say so. A silent failure here is the
+      // worst outcome: the review stays hidden from the shop and nobody knows.
+      if (before) setReviews((prev) => prev.map((r) => (r.id === id ? before : r)));
+      const data = await res.json().catch(() => ({}));
+      alert(
+        res.status === 401
+          ? "Your admin session has expired. Log in again and try once more."
+          : `Could not save that: ${data.error || res.statusText}`,
+      );
+    }
   }
 
-  async function toggleVerified(id: string, verified: boolean) {
-    await fetch("/api/reviews", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, verified }),
-    });
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, verified } : r))
-    );
-  }
+  const toggleApproved = (id: string, approved: boolean) => patchReview(id, { approved });
+  const toggleVerified = (id: string, verified: boolean) => patchReview(id, { verified });
 
   async function deleteReview(id: string) {
     if (!confirm("Delete this review permanently?")) return;
-    await fetch(`/api/reviews?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/reviews?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      alert(
+        res.status === 401
+          ? "Your admin session has expired. Log in again and try once more."
+          : "Could not delete that review.",
+      );
+      return;
+    }
     setReviews((prev) => prev.filter((r) => r.id !== id));
   }
 
