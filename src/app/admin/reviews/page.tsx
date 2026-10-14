@@ -204,19 +204,26 @@ export default function AdminReviews() {
       if (file.name.endsWith(".json")) {
         importData = JSON.parse(text);
       } else if (file.name.endsWith(".csv")) {
-        // Parse CSV
-        const lines = text.split("\n").filter((l) => l.trim());
-        if (lines.length < 2) {
-          alert("CSV file is empty or has no data rows.");
+        const rows = parseCSV(text);
+        const headerAt = findHeaderRow(rows);
+        if (headerAt === -1) {
+          alert(
+            "Could not find the column names in this file.\n\n" +
+            "One row must name the columns — at least a name, a rating and a body.",
+          );
           setImporting(false);
           return;
         }
-        const headers = lines[0].split(",").map((h) => h.trim());
-        for (let i = 1; i < lines.length; i++) {
-          const values = parseCSVLine(lines[i]);
+
+        const headers = rows[headerAt].map(normaliseHeader);
+        for (let i = headerAt + 1; i < rows.length; i++) {
+          const values = rows[i];
+          // A row of empty cells is what a spreadsheet leaves behind, not a
+          // review somebody wrote.
+          if (!values.some((v) => v.trim())) continue;
           const obj: Record<string, unknown> = {};
           headers.forEach((h, idx) => {
-            obj[h] = values[idx] || "";
+            if (h) obj[h] = values[idx] ?? "";
           });
           importData.push(obj);
         }
@@ -243,14 +250,15 @@ export default function AdminReviews() {
         // What landed and what did not. A bare count hides the rows that were
         // left out, which is the half worth knowing about.
         const notes = [`Imported ${result.count} review(s).`];
-        if (result.skipped_product) {
-          notes.push(
-            `${result.skipped_product} skipped — the product could not be recognised. ` +
-            `Check the "product" column matches a product name exactly.`,
-          );
-        }
-        if (result.skipped_fields) {
-          notes.push(`${result.skipped_fields} skipped — missing a name or a rating of 1 to 5.`);
+        const s = result.skipped || {};
+        const reasons: Record<string, string> = {
+          product: "the product could not be recognised",
+          name: "no reviewer name",
+          rating: "no rating between 1 and 5",
+          body: "no review text",
+        };
+        for (const [key, why] of Object.entries(reasons)) {
+          if (s[key]) notes.push(`${s[key]} skipped — ${why}.`);
         }
         if (result.partial) notes.push(`Some rows failed: ${result.partial}`);
         alert(notes.join("\n\n"));
@@ -269,35 +277,81 @@ export default function AdminReviews() {
   }
 
   // Simple CSV line parser that handles quoted fields
-  function parseCSVLine(line: string): string[] {
-    const result: string[] = [];
-    let current = "";
+  /**
+   * The whole file into rows of cells.
+   *
+   * Split line by line, a review whose text contains a line break ends the row
+   * early and every column after it lands in the wrong place — so quotes are
+   * tracked across the whole file rather than within one line.
+   */
+  function parseCSV(text: string): string[][] {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = "";
     let inQuotes = false;
 
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
+    const endCell = () => { row.push(cell); cell = ""; };
+    const endRow = () => { endCell(); rows.push(row); row = []; };
+
+    const clean = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (let i = 0; i < clean.length; i++) {
+      const char = clean[i];
       if (inQuotes) {
-        if (char === '"' && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else if (char === '"') {
-          inQuotes = false;
-        } else {
-          current += char;
-        }
-      } else {
-        if (char === '"') {
-          inQuotes = true;
-        } else if (char === ",") {
-          result.push(current);
-          current = "";
-        } else {
-          current += char;
-        }
+        if (char === '"' && clean[i + 1] === '"') { cell += '"'; i++; }
+        else if (char === '"') inQuotes = false;
+        else cell += char;
+      } else if (char === '"') inQuotes = true;
+      else if (char === ",") endCell();
+      else if (char === "\n") endRow();
+      else cell += char;
+    }
+    if (cell || row.length) endRow();
+    return rows.filter((r) => r.length > 1 || r[0]?.trim());
+  }
+
+  /**
+   * What a column is, whatever it was called.
+   *
+   * A sheet that has been worked on by hand does not keep the export's
+   * spelling — "tittle" for title, "review" for the body, "customer" for the
+   * name. Refusing those would be refusing the file for a reason the person
+   * cannot see in it.
+   */
+  const HEADER_ALIASES: Record<string, string> = {
+    name: "name", customer: "name", customer_name: "name", reviewer: "name",
+    rating: "rating", stars: "rating", star: "rating", score: "rating",
+    title: "title", tittle: "title", headline: "title", subject: "title",
+    body: "body", review: "body", comment: "body", content: "body",
+    message: "body", text: "body", feedback: "body",
+    product: "product", product_name: "product", item: "product",
+    product_id: "product_id",
+    email: "email", images: "images", image: "images",
+    verified: "verified", approved: "approved",
+    created_at: "created_at", date: "created_at",
+  };
+
+  function normaliseHeader(raw: string): string {
+    const key = String(raw || "").toLowerCase().replace(/[\s-]+/g, "_").trim();
+    return HEADER_ALIASES[key] || "";
+  }
+
+  /**
+   * Which row names the columns.
+   *
+   * Numbers and Excel both leave rows above the real header — a sheet title, a
+   * note, a stray row from an earlier edit. Taking the first line on faith
+   * read those as column names, so every field landed under a heading that
+   * was not there and the import reported that nothing had a name or rating.
+   */
+  function findHeaderRow(rows: string[][]): number {
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const named = new Set(rows[i].map(normaliseHeader).filter(Boolean));
+      // A header row names the three things a review cannot do without.
+      if (named.has("name") && named.has("body") && (named.has("rating") || named.has("product"))) {
+        return i;
       }
     }
-    result.push(current);
-    return result;
+    return -1;
   }
 
   const filtered = reviews.filter((r) => {

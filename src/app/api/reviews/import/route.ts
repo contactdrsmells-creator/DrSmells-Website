@@ -79,20 +79,27 @@ export async function POST(request: Request) {
 
   // Validate and sanitize each review
   const validReviews = [];
-  const skipped = { product: 0, fields: 0 };
+  const skipped = { product: 0, name: 0, rating: 0, body: 0 };
   for (const r of reviews) {
     const name = String(r.name || "").trim().slice(0, 100);
     const email = String(r.email || "").trim().toLowerCase().slice(0, 200);
     const rating = Number(r.rating);
-    const title = String(r.title || "").trim().slice(0, 200);
-    const body = String(r.body || "").trim().slice(0, 2000);
+    // Optional. Plenty of people write what they think and never title it,
+    // and a title invented for them would be us putting words in their mouth.
+    const title = String(r.title ?? r.tittle ?? "").trim().slice(0, 200);
+    // Required: a star with nothing beside it tells a shopper nothing.
+    const body = String(r.body ?? r.review ?? r.comment ?? "").trim().slice(0, 2000);
     const product_id = productFor(r);
 
     // Email is optional on import — imported reviews often come from sources
     // that never captured one. The column is NOT NULL, so an empty string
     // stands in. Reviews submitted on the site still require a valid email.
+    // Counted one reason at a time, so the result can say which column to
+    // look at rather than listing everything a review might have been missing.
     if (!product_id) { skipped.product += 1; continue; }
-    if (!name || isNaN(rating) || rating < 1 || rating > 5) { skipped.fields += 1; continue; }
+    if (!name) { skipped.name += 1; continue; }
+    if (isNaN(rating) || rating < 1 || rating > 5) { skipped.rating += 1; continue; }
+    if (!body) { skipped.body += 1; continue; }
 
     // Parse images - handle semicolon-separated (CSV) or array (JSON)
     let images: string[] = [];
@@ -117,9 +124,16 @@ export async function POST(request: Request) {
   }
 
   if (validReviews.length === 0) {
+    // The commonest cause first, named as the column to go and look at.
     const why = skipped.product
-      ? `No row named a product we recognise. Check the "product" column matches a product name exactly, or that "product_id" was not altered.`
-      : "Each review needs a name, a product and a rating of 1 to 5. Email is optional.";
+      ? `No row named a product we recognise. Check the "product" column matches a product name exactly.`
+      : skipped.name
+        ? `No row had a name. Check the "name" column is where the reviewer's name is.`
+        : skipped.rating
+          ? `No row had a rating between 1 and 5. Check the "rating" column.`
+          : skipped.body
+            ? `No row had any review text. Check the "body" column — a title on its own is not enough.`
+            : "Nothing in this file looked like a review.";
     return Response.json({ error: why }, { status: 400 });
   }
 
@@ -142,9 +156,7 @@ export async function POST(request: Request) {
   return Response.json({
     success: true,
     count: inserted,
-    skipped: skipped.product + skipped.fields,
-    skipped_product: skipped.product,
-    skipped_fields: skipped.fields,
+    skipped,
     partial: failures.length ? failures[0] : undefined,
   });
 }
