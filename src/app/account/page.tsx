@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Loader2, Package, Gift, Crown, Ticket, RefreshCw, ChevronRight } from "lucide-react";
+import { Loader2, Package, Gift, Crown, Ticket, RefreshCw, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -20,22 +20,16 @@ import Link from "next/link";
  * order should never require an account.
  */
 
-interface OrderItem {
-  product_name?: string;
-  variation?: string;
-  quantity?: number;
-  total_price?: number;
-  subscription?: { interval_months: number; price: number } | null;
-}
-
 interface MemberOrder {
   order_number: string;
+  source: "website" | "chat";
   status: string;
   payment_status: string;
   total: number;
-  discount?: number;
   voucher_code?: string | null;
-  items: OrderItem[];
+  items: { name: string; variation: string | null; quantity: number; subscription?: boolean }[];
+  tracking_code: string | null;
+  tracking_url: string | null;
   created_at: string;
 }
 
@@ -56,7 +50,6 @@ interface Me {
   rules: { min_redeem: number; points_per_ringgit: number };
   tier: { current: Tier | null; next: Tier | null; earned: number; toNext: number; progress: number };
   tiers: Tier[];
-  orders: MemberOrder[];
 }
 
 interface Subscription {
@@ -104,21 +97,11 @@ function statusStyle(status: string) {
 }
 
 export default function AccountPage() {
-  const [orderNumber, setOrderNumber] = useState("");
-  const [order, setOrder] = useState<{
-    order_number: string;
-    status: string;
-    payment_status: string;
-    total: number;
-    created_at: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
   const [me, setMe] = useState<Me | null>(null);
   const [meLoading, setMeLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("points");
 
+  const [orders, setOrders] = useState<MemberOrder[] | null>(null);
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const [vouchers, setVouchers] = useState<Voucher[] | null>(null);
   const [copied, setCopied] = useState("");
@@ -159,6 +142,12 @@ export default function AccountPage() {
   // asking Stripe, and nobody should wait on that to read their points.
   useEffect(() => {
     if (!me) return;
+    if (tab === "orders" && orders === null) {
+      fetch("/api/customer/orders")
+        .then((r) => (r.ok ? r.json() : { orders: [] }))
+        .then((d) => setOrders(d.orders || []))
+        .catch(() => setOrders([]));
+    }
     if (tab === "subscription" && subs === null) {
       fetch("/api/customer/subscriptions")
         .then((r) => (r.ok ? r.json() : { subscriptions: [] }))
@@ -171,7 +160,7 @@ export default function AccountPage() {
         .then((d) => setVouchers(d.vouchers || []))
         .catch(() => setVouchers([]));
     }
-  }, [tab, me, subs, vouchers]);
+  }, [tab, me, orders, subs, vouchers]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -219,23 +208,6 @@ export default function AccountPage() {
     manual: "Adjusted by Dr.Smells",
   };
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!orderNumber.trim()) return;
-    setLoading(true);
-    setError("");
-    setOrder(null);
-    try {
-      const res = await fetch(`/api/orders?order_number=${orderNumber.trim()}`);
-      const data = await res.json();
-      if (data.order) setOrder(data.order);
-      else setError("Order not found. Please check your order number.");
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const tierColour = me?.tier.current?.colour || "#4A5320";
 
@@ -246,7 +218,7 @@ export default function AccountPage() {
           <div className="mb-10 rounded-2xl border border-olive/15 p-6 text-center">
             <Gift className="w-8 h-8 text-olive mx-auto mb-3" />
             <p className="text-sm text-olive/70 mb-4">
-              Log in to collect points, track your orders and see your rewards.
+              Log in to track your orders, collect points and see your rewards.
             </p>
             <Link
               href="/login"
@@ -407,19 +379,28 @@ export default function AccountPage() {
             {/* ── Orders ───────────────────────────────────────────────── */}
             {tab === "orders" && (
               <div className="space-y-3">
-                {me.orders.length === 0 ? (
+                {orders === null ? (
+                  <div className="flex justify-center py-10 text-olive/30">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                ) : orders.length === 0 ? (
                   <div className="text-center py-10">
                     <Package className="w-8 h-8 text-olive/20 mx-auto mb-3" />
                     <p className="text-sm text-olive/40 mb-4">No orders yet.</p>
                     <Link href="/shop" className="text-sm text-olive underline">Start shopping</Link>
                   </div>
                 ) : (
-                  me.orders.map((o) => (
+                  orders.map((o) => (
                     <div key={o.order_number} className="rounded-xl border border-olive/15 p-4">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-olive">{o.order_number}</p>
-                          <p className="text-xs text-olive/40">{day(o.created_at)}</p>
+                          <p className="text-xs text-olive/40">
+                            {day(o.created_at)}
+                            {/* Where it was placed, so an order taken over chat
+                                is not a mystery entry they never made here. */}
+                            {o.source === "chat" ? " · ordered over WhatsApp" : ""}
+                          </p>
                         </div>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${statusStyle(o.status)}`}>
                           {o.status.charAt(0).toUpperCase() + o.status.slice(1)}
@@ -430,7 +411,7 @@ export default function AccountPage() {
                         {(Array.isArray(o.items) ? o.items : []).map((item, i) => (
                           <div key={i} className="flex justify-between gap-3 text-sm">
                             <span className="text-olive/70 min-w-0">
-                              {item.product_name}
+                              {item.name}
                               {item.variation ? <span className="text-olive/40"> · {item.variation}</span> : null}
                               {item.subscription ? (
                                 <span className="ml-1.5 text-xs text-sage">· subscription</span>
@@ -440,6 +421,29 @@ export default function AccountPage() {
                           </div>
                         ))}
                       </div>
+
+                      {/* The parcel. A tracking code with nowhere to type it in
+                          is half an answer, so the code is also the link. */}
+                      {o.tracking_code && (
+                        <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2.5 rounded-lg bg-sage-light/25">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-wide text-olive/50">Tracking</p>
+                            <p className="text-sm font-mono font-semibold text-olive truncate">
+                              {o.tracking_code}
+                            </p>
+                          </div>
+                          {o.tracking_url && (
+                            <a
+                              href={o.tracking_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-olive text-cream text-xs font-semibold hover:bg-sage-dark"
+                            >
+                              Track <ChevronRight className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex justify-between items-center pt-3 border-t border-olive/10">
                         <span className="text-xs text-olive/50">
@@ -451,6 +455,12 @@ export default function AccountPage() {
                       </div>
                     </div>
                   ))
+                )}
+
+                {orders !== null && orders.length > 0 && (
+                  <p className="text-xs text-olive/40 text-center pt-2">
+                    A tracking number appears once your parcel has been collected.
+                  </p>
                 )}
               </div>
             )}
@@ -646,68 +656,6 @@ export default function AccountPage() {
               <button onClick={logout} className="mt-4 text-sm text-olive/50 hover:text-olive underline">
                 Log out
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* The tracker. A member has their orders above; this is for everyone
-            else, and for a member checking an order placed over chat. */}
-        <div className="text-center mb-8">
-          <Package className="w-12 h-12 text-olive mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-olive mb-2">Track Your Order</h1>
-          <p className="text-olive/60">Enter your order number to check your order status</p>
-        </div>
-
-        <form onSubmit={handleSearch} className="flex gap-2 mb-8">
-          <input
-            type="text"
-            placeholder="Enter order number"
-            value={orderNumber}
-            onChange={(e) => setOrderNumber(e.target.value.toUpperCase())}
-            className="flex-1 px-4 py-3 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
-          />
-          <button
-            type="submit"
-            disabled={loading || !orderNumber.trim()}
-            className="px-6 py-3 bg-olive text-cream rounded-lg font-semibold hover:bg-sage-dark transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            Track
-          </button>
-        </form>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-
-        {order && (
-          <div className="bg-sage-light/15 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-olive mb-4">Order Details</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-olive/60">Order Number</span>
-                <span className="text-sm font-semibold text-olive">{order.order_number}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-olive/60">Status</span>
-                <span className={`text-sm font-semibold ${
-                  order.payment_status === "paid" ? "text-sage" :
-                  order.payment_status === "failed" ? "text-red-600" :
-                  "text-amber-600"
-                }`}>
-                  {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-olive/60">Total</span>
-                <span className="text-sm font-semibold text-olive">RM {Number(order.total).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-olive/60">Date</span>
-                <span className="text-sm text-olive">{day(order.created_at)}</span>
-              </div>
             </div>
           </div>
         )}

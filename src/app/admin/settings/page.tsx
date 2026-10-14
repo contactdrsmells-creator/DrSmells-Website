@@ -18,6 +18,9 @@ interface Settings {
     whatsapp_enabled: string;
     whatsapp_url: string;
   };
+  // Where a member's tracking number takes them. Kept here rather than in the
+  // code because the courier is a business decision, not a fact about code.
+  shipping: { tracking_url: string };
 }
 
 const defaultSettings: Settings = {
@@ -31,6 +34,7 @@ const defaultSettings: Settings = {
     whatsapp_enabled: "true",
     whatsapp_url: "",
   },
+  shipping: { tracking_url: "https://ecommerceportal.dhl.com/track/?ref={code}" },
 };
 
 export default function AdminSettings() {
@@ -95,6 +99,25 @@ export default function AdminSettings() {
       </div>
 
       <div className="space-y-6">
+        {/* Shipment tracking */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">Shipment Tracking</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Where the Track button in a member&apos;s order takes them. Put <code className="px-1 bg-gray-100 rounded">{"{code}"}</code> where
+            the courier&apos;s site expects the tracking number.
+          </p>
+          <input
+            type="text"
+            value={settings.shipping.tracking_url}
+            onChange={(e) => updateField("shipping", "tracking_url", e.target.value)}
+            placeholder="https://ecommerceportal.dhl.com/track/?ref={code}"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50"
+          />
+          <p className="text-xs text-gray-400 mt-2">
+            Leave as it is for DHL eCommerce, which is what the labels are made with.
+          </p>
+        </div>
+
         {/* Brand Settings */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Brand</h2>
