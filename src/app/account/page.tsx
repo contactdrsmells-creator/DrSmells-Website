@@ -30,12 +30,36 @@ export default function AccountPage() {
   } | null>(null);
   const [meLoading, setMeLoading] = useState(true);
 
+  /**
+   * The balance first, then whatever the CRM adds to it.
+   *
+   * Both used to arrive together, so nothing showed until the CRM had answered
+   * across the network — three to five seconds to display a figure already
+   * sitting in our own database. The page now paints on what we hold, and asks
+   * for it again only if the chat orders turned out to add something.
+   */
   useEffect(() => {
+    let cancelled = false;
+
     fetch("/api/customer/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setMe(d?.customer ? d : null))
+      .then((d) => { if (!cancelled) setMe(d?.customer ? d : null); })
       .catch(() => {})
-      .finally(() => setMeLoading(false));
+      .finally(() => { if (!cancelled) setMeLoading(false); });
+
+    // Deliberately not chained to the above: the balance must show the moment
+    // it arrives, not when this finishes. A guest gets a 401 and nothing else.
+    fetch("/api/customer/sync", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((sync) => {
+        if (cancelled || !sync?.awarded) return;
+        return fetch("/api/customer/me")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((fresh) => { if (!cancelled && fresh?.customer) setMe(fresh); });
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
   }, []);
 
   /**

@@ -80,40 +80,65 @@ function expiryFrom(months: number): string | null {
 }
 
 /**
- * Awards the points an order earned.
+ * Awards the points a batch of orders earned.
  *
- * Keyed on the order number so a payment webhook that fires twice — which they
- * do — cannot pay the customer twice. The check is a read before a write
- * rather than a database constraint so that a missing unique index cannot turn
- * a duplicate award into a failed order.
+ * Keyed on the order number, so a payment webhook that fires twice — which
+ * they do — cannot pay the customer twice. The check is a read before a write
+ * rather than a database constraint, so that a missing unique index cannot
+ * turn a duplicate award into a failed order.
+ *
+ * Two queries whatever the number of orders. The account page sweeps every
+ * order a customer has on each load, and asking the ledger about each one
+ * separately meant a page waiting on dozens of round trips to award, almost
+ * always, nothing at all: the common case is that every order has already been
+ * paid for and the whole exchange was to confirm it.
  */
-export async function awardForOrder(
+export async function awardForOrders(
   db: SupabaseClient,
-  { customerId, orderNumber, spend }: { customerId: string; orderNumber: string; spend: number },
-): Promise<{ awarded: number; skipped?: string }> {
+  { customerId, orders }: { customerId: string; orders: { orderNumber: string; spend: number }[] },
+): Promise<{ awarded: number; orders: number }> {
+  const wanted = orders.filter((o) => o.orderNumber);
+  if (!wanted.length) return { awarded: 0, orders: 0 };
+
   const rules = await getRules(db);
-  if (!rules.enabled) return { awarded: 0, skipped: "points_disabled" };
+  if (!rules.enabled) return { awarded: 0, orders: 0 };
 
-  const { data: existing } = await db
+  // Which of these the ledger has already paid for. Keyed on the order number
+  // alone, as the single-order path is, so an order reaching us twice through
+  // different channels is still only paid for once.
+  const { data: already } = await db
     .from("points_ledger")
-    .select("id")
-    .eq("order_number", orderNumber)
-    .gt("delta", 0)
-    .maybeSingle();
-  if (existing) return { awarded: 0, skipped: "already_awarded" };
+    .select("order_number")
+    .in("order_number", wanted.map((o) => o.orderNumber))
+    .gt("delta", 0);
 
-  const points = Math.floor(Math.max(0, spend) * rules.earn_per_ringgit);
-  if (points <= 0) return { awarded: 0, skipped: "nothing_to_award" };
+  const seen = new Set((already || []).map((row) => row.order_number));
+  const expires = expiryFrom(rules.expiry_months);
 
-  const { error } = await db.from("points_ledger").insert({
-    customer_id: customerId,
-    delta: points,
-    reason: "order",
-    order_number: orderNumber,
-    expires_at: expiryFrom(rules.expiry_months),
-  });
-  if (error) return { awarded: 0, skipped: error.message };
-  return { awarded: points };
+  const rows = [];
+  for (const order of wanted) {
+    if (seen.has(order.orderNumber)) continue;
+    // Marked as we go: the same order number twice in one batch is one award.
+    seen.add(order.orderNumber);
+    const points = Math.floor(Math.max(0, order.spend) * rules.earn_per_ringgit);
+    if (points <= 0) continue;
+    rows.push({
+      customer_id: customerId,
+      delta: points,
+      reason: "order",
+      order_number: order.orderNumber,
+      expires_at: expires,
+    });
+  }
+
+  if (!rows.length) return { awarded: 0, orders: 0 };
+
+  const { error } = await db.from("points_ledger").insert(rows);
+  if (error) {
+    console.error("[Points] Could not award a batch:", error.message);
+    return { awarded: 0, orders: 0 };
+  }
+  return { awarded: rows.reduce((sum, row) => sum + row.delta, 0), orders: rows.length };
 }
 
 /** What a number of points is worth in ringgit. */
@@ -229,18 +254,11 @@ export async function awardForOtherChannels(
     return { awarded: 0, orders: 0 };
   }
 
-  let awarded = 0;
-  let counted = 0;
-  for (const order of orders) {
-    const result = await awardForOrder(db, {
-      customerId,
+  return awardForOrders(db, {
+    customerId,
+    orders: orders.map((order) => ({
       orderNumber: order.order_id,
       spend: Number(order.amount) || 0,
-    });
-    if (result.awarded) {
-      awarded += result.awarded;
-      counted += 1;
-    }
-  }
-  return { awarded, orders: counted };
+    })),
+  });
 }

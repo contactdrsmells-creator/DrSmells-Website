@@ -1,5 +1,5 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
-import { awardForOrder, awardForOtherChannels, getBalance, getHistory, getRules } from "@/lib/points";
+import { awardForOrders, getBalance, getHistory, getRules } from "@/lib/points";
 
 /**
  * The account's own view of itself: who it is, what it has, and why.
@@ -9,6 +9,13 @@ import { awardForOrder, awardForOtherChannels, getBalance, getHistory, getRules 
  * is keyed on the order number and so cannot pay twice, which makes a sweep
  * safe to run as often as the page is opened — and means a missed webhook
  * costs a customer nothing.
+ *
+ * The sweep is two queries for any number of orders, and everything here talks
+ * only to our own database. What a customer bought over chat lives in the CRM,
+ * and fetching it used to happen here too — a page that could not show a
+ * balance until a second system had answered, which took three to five seconds
+ * to display a number we already held. That now has an endpoint of its own,
+ * called after this one has painted.
  */
 export async function GET() {
   const session = await getCustomerSession();
@@ -23,29 +30,12 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  for (const order of orders || []) {
-    if (order.payment_status !== "paid") continue;
-    await awardForOrder(db, {
-      customerId: session.id,
-      orderNumber: order.order_number,
-      spend: Number(order.total || 0),
-    });
-  }
-
-  // And what they bought over chat, which lands in the CRM rather than here.
-  // Only from the day this account was opened.
-  const { data: profile } = await db
-    .from("customers")
-    .select("created_at")
-    .eq("id", session.id)
-    .maybeSingle();
-  if (profile?.created_at) {
-    await awardForOtherChannels(db, {
-      customerId: session.id,
-      phone: session.phone,
-      since: profile.created_at,
-    });
-  }
+  await awardForOrders(db, {
+    customerId: session.id,
+    orders: (orders || [])
+      .filter((order) => order.payment_status === "paid")
+      .map((order) => ({ orderNumber: order.order_number, spend: Number(order.total || 0) })),
+  });
 
   const [balance, history, rules] = await Promise.all([
     getBalance(db, session.id),

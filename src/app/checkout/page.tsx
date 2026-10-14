@@ -113,6 +113,19 @@ export default function CheckoutPage() {
           min_redeem: d.rules.min_redeem,
           per_ringgit: d.rules.points_per_ringgit,
         });
+
+        // What they earned over chat is collected separately, since it means
+        // waiting on the CRM and nothing should wait on that before showing a
+        // balance. Only the figure moves when it lands; what may be spent is
+        // re-read on the server as the order is placed, so a balance a second
+        // out of date can never overspend.
+        fetch("/api/customer/sync", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((sync) => {
+            if (!sync?.awarded) return;
+            setPoints((prev) => (prev ? { ...prev, balance: sync.balance } : prev));
+          })
+          .catch(() => {});
       })
       .catch(() => {});
   }, []);
