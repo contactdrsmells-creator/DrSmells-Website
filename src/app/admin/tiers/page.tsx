@@ -31,12 +31,21 @@ export default function AdminTiers() {
   const [adding, setAdding] = useState<typeof BLANK | null>(null);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
+  // Set when the tiers table is not there yet, so the page says what to do
+  // rather than looking like a shop that simply has no tiers.
+  const [setupNeeded, setSetupNeeded] = useState(false);
 
   const say = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
   async function load() {
     const res = await fetch("/api/admin/tiers");
-    if (res.ok) setTiers((await res.json()).tiers || []);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setTiers(data.tiers || []);
+      setSetupNeeded(false);
+    } else {
+      setSetupNeeded(/schema cache|does not exist|member_tiers/i.test(data.error || ""));
+    }
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -107,6 +116,18 @@ export default function AdminTiers() {
           climb at the same rate as the shop&apos;s.
         </p>
       </div>
+
+      {setupNeeded && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900 mb-1">
+            The tiers table has not been created yet
+          </p>
+          <p className="text-sm text-amber-800">
+            Run the member_tiers migration in Supabase and reload this page. Until then the
+            member area simply shows no tiers — nothing else is affected.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         {tiers.map((tier) => {
