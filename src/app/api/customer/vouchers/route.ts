@@ -1,5 +1,6 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
+import { voucherWindow } from "@/lib/voucher-dates";
 
 /**
  * The vouchers a member can actually use today.
@@ -48,8 +49,7 @@ export async function GET() {
 
   const usable = [];
   for (const voucher of data || []) {
-    if (voucher.start_date && new Date(voucher.start_date) > now) continue;
-    if (voucher.end_date && new Date(voucher.end_date) < now) continue;
+    if (!voucherWindow(voucher.start_date, voucher.end_date, now).ok) continue;
     if (voucher.max_uses && (await countPaidVoucherUses(db, voucher.code)) >= voucher.max_uses) continue;
 
     usable.push({

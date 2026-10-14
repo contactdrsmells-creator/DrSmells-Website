@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
+import { voucherWindow } from "@/lib/voucher-dates";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -24,14 +25,11 @@ export async function POST(request: Request) {
       return Response.json({ valid: false, error: "Invalid voucher code" });
     }
 
-    const now = new Date();
-
-    if (voucher.start_date && new Date(voucher.start_date) > now) {
-      return Response.json({ valid: false, error: "This voucher is not active yet" });
-    }
-
-    if (voucher.end_date && new Date(voucher.end_date) < now) {
-      return Response.json({ valid: false, error: "This voucher has expired" });
+    // Both ends inclusive, and read as days in Malaysia. The message names
+    // the date, since "not active yet" leaves the only useful fact unsaid.
+    const dates = voucherWindow(voucher.start_date, voucher.end_date);
+    if (!dates.ok) {
+      return Response.json({ valid: false, error: dates.error });
     }
 
     // Counted from paid orders, so a limit is spent by sales rather than by

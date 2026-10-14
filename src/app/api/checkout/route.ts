@@ -5,6 +5,7 @@ import { resolveUnitPrice, resolveSubscriptionPrice, hasUnmatchedCombo } from "@
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
+import { voucherWindow } from "@/lib/voucher-dates";
 import { findZone, quoteShipping, readShippingRates, type ProductShippingRates, type ShippingZone } from "@/lib/shipping";
 import { getCustomerSession } from "@/lib/customer-auth";
 import { getBalance, getRules, redeemableFor, spendForOrder } from "@/lib/points";
@@ -155,9 +156,9 @@ export async function POST(request: Request) {
         .single();
 
       if (voucher) {
-        const now = new Date();
-        const notExpired = !voucher.end_date || new Date(voucher.end_date) > now;
-        const notStarted = voucher.start_date && new Date(voucher.start_date) > now;
+        // Compared as calendar days in Malaysia, so the dates mean the days
+        // the shop wrote down rather than those days shifted eight hours.
+        const dates = voucherWindow(voucher.start_date, voucher.end_date);
         // Counted from paid orders rather than read off the voucher, so an
         // abandoned checkout cannot consume someone else's use.
         const withinLimit =
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
 
         const subOk = !has_subscription || voucher.applicable_for_subscription;
 
-        if (notExpired && !notStarted && withinLimit && meetsMin && subOk) {
+        if (dates.ok && withinLimit && meetsMin && subOk) {
           // Round to whole cents — a percentage voucher otherwise yields
           // fractional cents (e.g. RM133.245), which DOKU rejects as an invalid
           // price and which would be stored/displayed inconsistently.
