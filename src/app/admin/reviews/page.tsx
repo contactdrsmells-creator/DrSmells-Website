@@ -240,7 +240,20 @@ export default function AdminReviews() {
 
       if (res.ok) {
         const result = await res.json();
-        alert(`Successfully imported ${result.count} review(s).`);
+        // What landed and what did not. A bare count hides the rows that were
+        // left out, which is the half worth knowing about.
+        const notes = [`Imported ${result.count} review(s).`];
+        if (result.skipped_product) {
+          notes.push(
+            `${result.skipped_product} skipped — the product could not be recognised. ` +
+            `Check the "product" column matches a product name exactly.`,
+          );
+        }
+        if (result.skipped_fields) {
+          notes.push(`${result.skipped_fields} skipped — missing a name or a rating of 1 to 5.`);
+        }
+        if (result.partial) notes.push(`Some rows failed: ${result.partial}`);
+        alert(notes.join("\n\n"));
         loadReviews();
       } else {
         const err = await res.json();

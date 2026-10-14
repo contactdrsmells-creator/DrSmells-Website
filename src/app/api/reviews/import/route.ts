@@ -29,6 +29,11 @@ function parseImportDate(value: unknown): string | null {
   return isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Names compared the way a person means them, not the way they were typed. */
+const fold = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
 export async function POST(request: Request) {
   // Auth check
   const auth = await requirePermission("reviews.manage");
@@ -46,22 +51,48 @@ export async function POST(request: Request) {
 
   const db = getSupabase();
 
+  // Which products exist, so a row can be checked before it is sent rather
+  // than after Postgres has thrown out the whole file because of it.
+  const { data: products } = await db.from("products").select("id, name, slug");
+  const byId = new Set((products || []).map((p) => p.id));
+  const byName = new Map<string, string>();
+  for (const p of products || []) {
+    byName.set(fold(p.name), p.id);
+    if (p.slug) byName.set(fold(p.slug), p.id);
+  }
+
+  /**
+   * The product a row is about.
+   *
+   * The id is preferred and the name is the fallback, because the export
+   * writes both and a spreadsheet damages the id far more easily: a
+   * find-and-replace meant for the body text reaches into a column of
+   * hexadecimal and quietly turns a valid id into one character too many.
+   * The name survives that, and is the column a person was editing anyway.
+   */
+  const productFor = (row: Record<string, unknown>): string | null => {
+    const id = String(row.product_id || "").trim();
+    if (UUID.test(id) && byId.has(id)) return id;
+    const name = fold(String(row.product || row.product_name || ""));
+    return (name && byName.get(name)) || null;
+  };
+
   // Validate and sanitize each review
   const validReviews = [];
+  const skipped = { product: 0, fields: 0 };
   for (const r of reviews) {
     const name = String(r.name || "").trim().slice(0, 100);
     const email = String(r.email || "").trim().toLowerCase().slice(0, 200);
     const rating = Number(r.rating);
     const title = String(r.title || "").trim().slice(0, 200);
     const body = String(r.body || "").trim().slice(0, 2000);
-    const product_id = String(r.product_id || "").trim();
+    const product_id = productFor(r);
 
     // Email is optional on import — imported reviews often come from sources
     // that never captured one. The column is NOT NULL, so an empty string
     // stands in. Reviews submitted on the site still require a valid email.
-    if (!name || !product_id || isNaN(rating) || rating < 1 || rating > 5) {
-      continue; // Skip invalid rows
-    }
+    if (!product_id) { skipped.product += 1; continue; }
+    if (!name || isNaN(rating) || rating < 1 || rating > 5) { skipped.fields += 1; continue; }
 
     // Parse images - handle semicolon-separated (CSV) or array (JSON)
     let images: string[] = [];
@@ -86,16 +117,34 @@ export async function POST(request: Request) {
   }
 
   if (validReviews.length === 0) {
-    return Response.json(
-      { error: "No valid reviews found. Each review needs: name, product_id, rating (1-5). Email is optional." },
-      { status: 400 }
-    );
+    const why = skipped.product
+      ? `No row named a product we recognise. Check the "product" column matches a product name exactly, or that "product_id" was not altered.`
+      : "Each review needs a name, a product and a rating of 1 to 5. Email is optional.";
+    return Response.json({ error: why }, { status: 400 });
   }
 
-  const { error } = await db.from("reviews").insert(validReviews);
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  // One row at a time would be slower; one statement means a single bad row
+  // takes the whole file with it. Inserted in chunks so a failure costs a
+  // hundred rows rather than five hundred, and the rest still land.
+  let inserted = 0;
+  const failures: string[] = [];
+  for (let i = 0; i < validReviews.length; i += 100) {
+    const chunk = validReviews.slice(i, i + 100);
+    const { error } = await db.from("reviews").insert(chunk);
+    if (error) failures.push(error.message);
+    else inserted += chunk.length;
   }
 
-  return Response.json({ success: true, count: validReviews.length });
+  if (!inserted) {
+    return Response.json({ error: failures[0] || "Nothing could be imported" }, { status: 500 });
+  }
+
+  return Response.json({
+    success: true,
+    count: inserted,
+    skipped: skipped.product + skipped.fields,
+    skipped_product: skipped.product,
+    skipped_fields: skipped.fields,
+    partial: failures.length ? failures[0] : undefined,
+  });
 }
