@@ -16,14 +16,26 @@ import { markOrderPaid } from "@/lib/mark-order-paid";
  * were in fact paid, with the same CRM sync and confirmation email a webhook
  * would have triggered.
  *
- * Checks widen as they go — 1, then 3, 6, 6, 6, 12 and 12 hours later — so an
- * order is asked about seven times over roughly two days and then never again.
- * A missed notification shows up almost immediately or not at all, so there is
- * nothing to gain from polling an abandoned order forever.
+ * Checks widen as they go — 10 and 30 minutes, then 1, 3, 8, 16, 30 and 46
+ * hours — so an order is asked about eight times over roughly two days and
+ * then never again. A missed notification shows up almost immediately or not
+ * at all, so there is nothing to gain from polling an abandoned order forever.
  */
 
-/** Hours after the order at which each successive check falls due. */
-const CHECK_OFFSETS_HOURS = [1, 4, 10, 16, 22, 34, 46];
+/**
+ * Minutes after the order at which each successive check falls due.
+ *
+ * The first was an hour, which during a sale meant a customer paid, waited,
+ * saw nothing, and messaged us before anything had even looked — and if the
+ * hourly job was itself running behind, as it was on 15 October, the payment
+ * went unnoticed entirely. Thirty-two orders worth RM7,996 were sitting paid
+ * and unrecognised when somebody finally asked.
+ *
+ * So the first look is almost immediate and the gaps widen from there. A
+ * missed notification shows up at once or not at all, so the early checks are
+ * where the value is; the later ones are a formality that costs one query.
+ */
+const CHECK_OFFSETS_MINUTES = [10, 30, 60, 180, 480, 960, 1800, 2760];
 
 /** Beyond this an order is left alone regardless — the checkout has expired. */
 const MAX_AGE_HOURS = 48;
@@ -86,10 +98,10 @@ export async function GET(request: Request) {
     const count = order.payment_check_count ?? 0;
 
     // Seven checks and no more.
-    if (count >= CHECK_OFFSETS_HOURS.length) continue;
+    if (count >= CHECK_OFFSETS_MINUTES.length) continue;
 
     const dueAt =
-      new Date(order.created_at).getTime() + CHECK_OFFSETS_HOURS[count] * 3600_000;
+      new Date(order.created_at).getTime() + CHECK_OFFSETS_MINUTES[count] * 60_000;
     if (now < dueAt) continue;
 
     const status = await getDokuPaymentStatus(order.order_number);
