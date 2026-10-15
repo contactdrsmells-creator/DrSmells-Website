@@ -61,11 +61,61 @@ export function isDokuConfigured(): boolean {
  * a single net-priced line when they can't (a voucher was used, or float
  * rounding leaves a cent unaccounted for).
  */
+/**
+ * Text DOKU will accept.
+ *
+ * The gateway refuses anything outside plain English — "Cannot contain
+ * special character", in their words, confirmed by DOKU support. It took down
+ * one checkout in eight: of 421 orders carrying a Chinese name, a fullwidth
+ * comma or a curly quote, 56 were refused, while every one of the 23 orders
+ * that happened to be pure English went through.
+ *
+ * So the text is cleaned on its way out and nowhere else. The shop keeps its
+ * Chinese names, the CRM and the courier keep the address exactly as the
+ * customer typed it; only DOKU's copy is flattened, because only DOKU objects.
+ *
+ * Curly quotes and dashes become their plain equivalents rather than being
+ * dropped, since a phone keyboard produces them from ordinary typing and
+ * losing them would mangle an English address for no reason.
+ */
+const LOOKALIKES: Record<string, string> = {
+  "\u2018": "'", "\u2019": "'", "\u201C": '"', "\u201D": '"',
+  "\u2013": "-", "\u2014": "-", "\u00D7": "x", "\uFF0C": ",",
+  "\u3001": ",", "\u00A0": " ",
+};
+
+export function dokuSafeText(raw: string | null | undefined, fallback = ""): string {
+  const replaced = String(raw ?? "").replace(
+    /[\u2018\u2019\u201C\u201D\u2013\u2014\u00D7\uFF0C\u3001\u00A0]/g,
+    (ch) => LOOKALIKES[ch] ?? " ",
+  );
+
+  const ascii = replaced
+    // Anything still outside plain ASCII is dropped — Chinese, emoji, accents.
+    .replace(/[^\x20-\x7E]/g, " ")
+    // Punctuation DOKU has been seen to reject even in ASCII.
+    .replace(/[|\\^~`<>{}\[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    // A trailing or doubled comma is what stripping a Chinese city leaves.
+    .replace(/\s*,\s*(?=,)/g, "")
+    .replace(/^[,\s]+|[,\s]+$/g, "");
+
+  // What survives stripping can be punctuation and stray digits — "配套 D :
+  // 除臭霜 x4, 磨砂膏 x2" leaves "D : x4, x2 +", which tells a customer
+  // nothing and looks like a fault. Below a few real characters, the fallback
+  // is the more honest answer.
+  const meaningful = ascii.replace(/[^A-Za-z0-9]/g, "").length;
+  return meaningful >= 3 ? ascii : fallback;
+}
+
 export function buildDokuLineItems(input: DokuCheckoutInput): DokuLineItem[] {
   const toCents = (n: number) => Math.round(n * 100);
 
   const itemised: DokuLineItem[] = input.items.map((item) => ({
-    name: item.product_name,
+    // Falls back to the order number when a name is nothing but Chinese, so
+    // the line still says which purchase it belongs to.
+    name: dokuSafeText(item.product_name, `Order ${input.orderNumber}`),
     quantity: item.quantity,
     price: item.unit_price,
   }));
@@ -113,14 +163,14 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
       line_items: buildDokuLineItems(input),
     },
     customer: {
-      name: c.name,
+      name: dokuSafeText(c.name, "Customer"),
       email: c.email,
       phone: c.phone,
       // The gateway wants an ISO country code; sending MY for a Singapore
       // address would have the customer's card checked against the wrong
       // country.
       country: /singapore/i.test(c.country ?? "") ? "SG" : "MY",
-      address,
+      address: dokuSafeText(address, "Malaysia"),
     },
     checkout_experience: {
       language: "EN",
