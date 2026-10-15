@@ -89,7 +89,9 @@ export function voucherWindow(
       ok: false,
       reason: "expired",
       day: until,
-      error: `This voucher ended on ${readableDay(end)}`,
+      // Just that it has ended. The date it ended on is our record-keeping,
+      // not something the customer standing at checkout can act on.
+      error: "This voucher is expired",
     };
   }
 
