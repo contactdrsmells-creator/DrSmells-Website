@@ -14,8 +14,18 @@ export interface WhatsAppAutomationConfig {
   flowbuilder_key: string;
   /** Order status that qualifies for a reminder. */
   trigger_status: string;
-  /** Wait this long after the order is created before messaging. */
-  delay_hours: number;
+  /**
+   * Wait this long after the order is created before messaging.
+   *
+   * Minutes, because the useful waits are short: a customer who stalls at the
+   * payment page is still at their phone for the next few minutes and gone by
+   * the afternoon. delay_hours is what this used to be and is still read from
+   * saved settings, so an existing shop keeps its wait until someone changes
+   * it.
+   */
+  delay_minutes: number;
+  /** @deprecated Superseded by delay_minutes. Read for settings saved before. */
+  delay_hours?: number;
   /**
    * When the automation was switched on. Only orders created after this are
    * ever eligible, so enabling it never chases the existing backlog.
@@ -30,7 +40,7 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
   webhook_url: "https://api.strive.asia/custom/strive/flowbuilder/webhook.php",
   flowbuilder_key: "",
   trigger_status: "pending",
-  delay_hours: 3,
+  delay_minutes: 15,
   activated_at: null,
   phone_field: "phone",
 };
@@ -41,6 +51,20 @@ export const DEFAULT_AUTOMATION: WhatsAppAutomationConfig = {
  * example finishing one checkout then opening another) still counts as having
  * bought, so a small window back from the unpaid order is treated as paid.
  */
+/**
+ * How long to wait, whichever way it was saved.
+ *
+ * Settings written before this was measured in minutes hold delay_hours, and
+ * must keep meaning the same wait rather than suddenly becoming three minutes.
+ */
+export function delayMinutes(config: WhatsAppAutomationConfig): number {
+  if (Number.isFinite(config.delay_minutes) && config.delay_minutes > 0) {
+    return config.delay_minutes;
+  }
+  const hours = Number(config.delay_hours);
+  return Number.isFinite(hours) && hours > 0 ? hours * 60 : DEFAULT_AUTOMATION.delay_minutes;
+}
+
 export const PAYMENT_GRACE_MINUTES = 30;
 
 /**

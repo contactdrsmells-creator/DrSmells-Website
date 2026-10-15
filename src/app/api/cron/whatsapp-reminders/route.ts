@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "crypto";
 import {
   CUSTOMER_COOLDOWN_HOURS,
   PAYMENT_GRACE_MINUTES,
+  delayMinutes,
   QUIET_HOURS_END,
   currentHourInBusinessTimezone,
   getSupabase,
@@ -15,9 +16,9 @@ import { SITE_ORIGIN } from "@/lib/site-url";
 /**
  * Sends a WhatsApp follow-up for orders left unpaid.
  *
- * Runs on a schedule (GitHub Actions hourly — Vercel Hobby crons only fire once
- * a day, which is too coarse for a 3-hour rule). Protected by CRON_SECRET
- * because it triggers real customer messages.
+ * Runs on a schedule (GitHub Actions every five minutes — Vercel Hobby crons
+ * only fire once a day, which cannot serve a wait measured in minutes).
+ * Protected by CRON_SECRET because it triggers real customer messages.
  *
  * Three rules keep it from being a nuisance:
  *  - only orders placed after the automation was switched on
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
 
   const supabase = getSupabase();
   const now = Date.now();
-  const readyBefore = new Date(now - config.delay_hours * 3600_000).toISOString();
+  const readyBefore = new Date(now - delayMinutes(config) * 60_000).toISOString();
 
   const { data: orders, error } = await supabase
     .from("orders")

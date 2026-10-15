@@ -31,10 +31,19 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const existing = await loadAutomationConfig();
 
-    const delay = Number(body.delay_hours);
+    // Minutes now. A settings page saved before the change sends hours, and
+    // must keep meaning the same wait rather than becoming three minutes.
+    const delay = Number.isFinite(Number(body.delay_minutes))
+      ? Number(body.delay_minutes)
+      : Number(body.delay_hours) * 60;
 
-    if (!Number.isFinite(delay) || delay < 0 || delay > 720) {
-      return Response.json({ error: "Delay must be between 0 and 720 hours" }, { status: 400 });
+    // The job wakes every five minutes, so a shorter wait is one the schedule
+    // cannot keep — it would simply mean "next run".
+    if (!Number.isFinite(delay) || delay < 5 || delay > 43_200) {
+      return Response.json(
+        { error: "The wait must be between 5 minutes and 30 days" },
+        { status: 400 },
+      );
     }
     if (body.enabled && !String(body.webhook_url || "").startsWith("https://")) {
       return Response.json({ error: "Webhook URL must be https" }, { status: 400 });
@@ -59,7 +68,7 @@ export async function PUT(request: Request) {
           ? existing.flowbuilder_key
           : String(body.flowbuilder_key).trim(),
       trigger_status: String(body.trigger_status || "pending").trim(),
-      delay_hours: delay,
+      delay_minutes: Math.round(delay),
       activated_at: activatedAt,
       phone_field: String(body.phone_field || "phone").trim(),
     };

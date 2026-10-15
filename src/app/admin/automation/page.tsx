@@ -9,7 +9,8 @@ interface AutomationConfig {
   flowbuilder_key: string;
   flowbuilder_key_set?: boolean;
   trigger_status: string;
-  delay_hours: number;
+  delay_minutes: number;
+  delay_hours?: number;
   activated_at: string | null;
   phone_field: string;
 }
@@ -28,7 +29,14 @@ export default function AdminAutomationPage() {
   useEffect(() => {
     fetch("/api/whatsapp-automation")
       .then((r) => r.json())
-      .then((data) => setConfig(data))
+      .then((data) => {
+        // Settings saved before the wait was measured in minutes hold hours.
+        // Shown as the same wait rather than as an empty box.
+        if (!data.delay_minutes && data.delay_hours) {
+          data.delay_minutes = Math.round(Number(data.delay_hours) * 60);
+        }
+        setConfig(data);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -145,20 +153,27 @@ export default function AdminAutomationPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Send after (hours)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Send after (minutes)</label>
               <input
                 type="number"
-                min={0}
-                step={0.5}
-                value={config.delay_hours}
-                onChange={(e) => set("delay_hours", parseFloat(e.target.value) || 0)}
+                min={5}
+                step={5}
+                value={config.delay_minutes}
+                onChange={(e) => set("delay_minutes", parseInt(e.target.value) || 0)}
                 className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-olive/30"
               />
+              {/* The job wakes every five minutes, so anything finer than that
+                  is a wait the schedule cannot actually keep. */}
+              <p className="text-xs text-gray-400 mt-1">
+                15 = a quarter of an hour. Checked every 5 minutes, so the message
+                lands within about 5 minutes of the time you set.
+              </p>
             </div>
           </div>
 
           <div className="mt-4 text-xs text-gray-500 space-y-1">
-            <p>Only orders placed <strong>after you switch this on</strong> are messaged — existing orders are never chased.</p>
+            <p>Only orders placed <strong>after you switch this on</strong> are messaged — orders from before that are never chased.</p>
+            <p>Shortening the wait <strong>does</strong> reach orders already placed: anything still unpaid and older than the new wait becomes due on the next run.</p>
             <p>A customer gets <strong>one message</strong> even if they have several unpaid orders from retrying checkout.</p>
             <p>A customer who <strong>went on to pay</strong> is skipped — failed attempts before a successful order never trigger a reminder.</p>
             <p>Messages only send between <strong>6:00am and 11:59pm</strong> Malaysia time. Anything due overnight is held until 6am, not skipped.</p>
