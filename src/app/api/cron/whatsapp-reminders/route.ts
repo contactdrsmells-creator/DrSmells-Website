@@ -43,8 +43,13 @@ function authorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
 
+  // Vercel Cron signs its calls with "Authorization: Bearer <CRON_SECRET>" and
+  // nothing else, so that form has to be accepted or the schedule silently
+  // gets a 401 every time. The other two are kept for the external caller and
+  // for triggering a run by hand.
   const url = new URL(request.url);
-  const provided = request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
+  const bearer = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const provided = bearer || request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
   if (!provided) return false;
 
   // Hash both sides so timingSafeEqual gets equal-length buffers.
@@ -53,6 +58,12 @@ function authorised(request: Request): boolean {
     createHash("sha256").update(provided).digest(),
   );
 }
+
+/**
+ * Each customer is one call to the chatbot, and a catch-up run can carry
+ * dozens — 79 went out in 44 seconds this afternoon.
+ */
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   if (!authorised(request)) {

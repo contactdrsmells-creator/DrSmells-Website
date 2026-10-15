@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/whatsapp-reminders",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/payment-status-check",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

@@ -52,8 +52,13 @@ function authorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
 
+  // Vercel Cron signs its calls with "Authorization: Bearer <CRON_SECRET>" and
+  // nothing else, so that form has to be accepted or the schedule silently
+  // gets a 401 every time. The other two are kept for the external caller and
+  // for triggering a run by hand.
   const url = new URL(request.url);
-  const provided = request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
+  const bearer = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const provided = bearer || request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
 
   const a = createHash("sha256").update(secret).digest();
   const b = createHash("sha256").update(provided).digest();
@@ -67,6 +72,14 @@ interface OrderRow {
   created_at: string;
   payment_check_count: number | null;
 }
+
+/**
+ * This asks DOKU about each due order one at a time, so a run catching up on
+ * a backlog takes minutes — the manual run this morning took 3m41s. Left at
+ * the default it would be cut off partway through and the rest of the orders
+ * would wait another cycle.
+ */
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   if (!authorised(request)) {
