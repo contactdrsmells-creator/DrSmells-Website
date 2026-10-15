@@ -127,32 +127,58 @@ export async function loadAutomationConfig(): Promise<WhatsAppAutomationConfig> 
 }
 
 /**
- * WhatsApp needs an international number. Customers type local formats
- * ("0109776875", "+60 10-977 6875"), so normalise to 60XXXXXXXXX.
- * Returns null when there aren't enough digits to be a real number.
+ * WhatsApp needs an international number.
+ *
+ * Customers type local formats — "0109776875", "+60 10-977 6875" — so a
+ * Malaysian number is completed to 60XXXXXXXXX. Most are, which is why this
+ * once assumed all of them were.
+ *
+ * It isn't true. A Singapore customer typing "8818 6727" was turned into
+ * 6088186727, and one typing "65 8818 6727" into 606588186727 — numbers that
+ * do not exist. Six unpaid Singapore orders were "reminded" into the void,
+ * and nobody could tell, because sending to a wrong number looks exactly like
+ * sending to a right one.
+ *
+ * The order knows which country it ships to, so that decides the code rather
+ * than the digits alone. Where the country is not given, Malaysia is still
+ * assumed — that is what it almost always is.
  */
-export function normalisePhone(raw: string | undefined | null): string | null {
+
+/** Dialling code and local length for the countries the shop sells to. */
+const DIALLING = {
+  malaysia: { code: "60", min: 9, max: 10 },
+  singapore: { code: "65", min: 8, max: 8 },
+} as const;
+
+export function normalisePhone(
+  raw: string | undefined | null,
+  country?: string | null,
+): string | null {
   const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return null;
 
-  let normalised = digits;
-  if (normalised.startsWith("60")) {
-    // already international
-  } else if (normalised.startsWith("0")) {
-    normalised = "60" + normalised.slice(1);
-  } else {
-    normalised = "60" + normalised;
+  const where = /singapore|^sg$/i.test(String(country ?? "").trim())
+    ? DIALLING.singapore
+    : DIALLING.malaysia;
+
+  let local = digits;
+  // Already carries its own country code.
+  if (local.startsWith(where.code)) local = local.slice(where.code.length);
+  // A leading zero is the local trunk prefix, not part of the number.
+  else if (local.startsWith("0")) local = local.slice(1);
+  // A Malaysian-looking number on an order shipping elsewhere, or the reverse:
+  // trust the digits, since somebody typed a full international number.
+  else if (local.startsWith("60") && where.code !== "60" && local.length >= 11) {
+    return normalisePhone(digits, "Malaysia");
   }
 
-  // Malaysian mobiles are 60 + 9 or 10 digits.
-  if (normalised.length < 11 || normalised.length > 13) return null;
+  if (local.length < where.min || local.length > where.max) return null;
 
   // Reject placeholders like 0000000000 / 1111111111 that real orders do
-  // contain — they normalise to a valid-looking length but aren't numbers.
-  const subscriber = normalised.slice(2);
-  if (/^(\d)\1+$/.test(subscriber)) return null;
+  // contain — they are a valid length but are not numbers.
+  if (/^(\d)\1+$/.test(local)) return null;
 
-  return normalised;
+  return where.code + local;
 }
 
 export interface StriveSendResult {

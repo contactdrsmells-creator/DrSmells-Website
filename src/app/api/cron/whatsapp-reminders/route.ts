@@ -36,7 +36,7 @@ interface OrderRow {
   total: number;
   payment_url: string | null;
   created_at: string;
-  shipping: { name?: string; phone?: string } | null;
+  shipping: { name?: string; phone?: string; country?: string } | null;
 }
 
 function authorised(request: Request): boolean {
@@ -136,7 +136,8 @@ export async function GET(request: Request) {
 
   const lastPaidAt = new Map<string, number>();
   for (const paid of paidOrders || []) {
-    const phone = normalisePhone((paid.shipping as { phone?: string } | null)?.phone);
+    const shipTo = paid.shipping as { phone?: string; country?: string } | null;
+    const phone = normalisePhone(shipTo?.phone, shipTo?.country);
     if (!phone) continue;
     const at = new Date(paid.created_at as string).getTime();
     if (at > (lastPaidAt.get(phone) ?? 0)) lastPaidAt.set(phone, at);
@@ -157,7 +158,8 @@ export async function GET(request: Request) {
 
   const lastRemindedAt = new Map<string, string>();
   for (const reminded of remindedOrders || []) {
-    const phone = normalisePhone((reminded.shipping as { phone?: string } | null)?.phone);
+    const to = reminded.shipping as { phone?: string; country?: string } | null;
+    const phone = normalisePhone(to?.phone, to?.country);
     if (!phone) continue;
     const at = reminded.reminder_sent_at as string;
     const seen = lastRemindedAt.get(phone);
@@ -171,7 +173,7 @@ export async function GET(request: Request) {
   const stamp = () => new Date().toISOString();
 
   for (const order of candidates) {
-    const phone = normalisePhone(order.shipping?.phone);
+    const phone = normalisePhone(order.shipping?.phone, order.shipping?.country);
     if (!phone) {
       // Mark it so an unusable number isn't re-examined every hour forever.
       await supabase.from("orders").update({ reminder_sent_at: stamp() }).eq("id", order.id);
