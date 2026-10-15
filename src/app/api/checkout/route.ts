@@ -69,6 +69,14 @@ async function storeMetaAttribution(
   }
 }
 
+/**
+ * Longer than a page render, because this waits on two other systems: the CRM
+ * for an order number and the gateway for a checkout, each of which may be
+ * retried. Left at the default it is the retries that get cut off, which is
+ * the opposite of what they are for.
+ */
+export const maxDuration = 30;
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();

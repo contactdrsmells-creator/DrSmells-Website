@@ -162,6 +162,10 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
    * same checkout — so a retry cannot leave two checkouts behind for one
    * order, which is what re-signing each attempt would risk.
    */
+  // Bounded deliberately. Three attempts at eight seconds with the waits
+  // between them is about eighteen seconds at worst, which stays inside the
+  // serverless function's own limit — a retry that outlives the request it is
+  // serving helps nobody and leaves the customer with a dead page.
   const RETRY_DELAYS_MS = [400, 1200];
   let res: Response | null = null;
   let lastError = "";
@@ -187,7 +191,7 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
         body: bodyString,
         // A gateway that has stopped answering should free the customer to try
         // again rather than hold the page until something else times out.
-        signal: AbortSignal.timeout(12_000),
+        signal: AbortSignal.timeout(8_000),
       });
     } catch (err) {
       // A dropped connection or a timeout: nothing was refused, so ask again.
