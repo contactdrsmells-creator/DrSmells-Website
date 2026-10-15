@@ -230,27 +230,61 @@ export async function POST(request: Request) {
     }
 
     // Create order
-    const orderNumber = await generateOrderNumber();
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        status: "pending",
-        payment_method,
-        payment_status: "pending",
-        items,
-        shipping,
-        source: source || "Direct",
-        subtotal: verifiedTotal,
-        shipping_cost: serverShippingCost,
-        discount: serverDiscount,
-        voucher_code: voucher_code || null,
-        total: serverTotal,
-      })
-      .select()
-      .single();
+    /**
+     * Allocate a number and insert, trying again if the number was taken.
+     *
+     * The CRM hands out numbers by reading the highest and adding one, which
+     * two checkouts a moment apart both do before either has saved — so they
+     * are given the same one. Two random letters are appended, and that is the
+     * only thing that has been keeping them apart. In October thirty-two
+     * numbers went out more than once and one went out seven times; at seven
+     * draws from six hundred and seventy-six pairs, a genuine clash is a
+     * matter of time rather than of chance.
+     *
+     * order_number is unique in the database, so a clash is refused — and the
+     * customer saw "Failed to create order" and lost a filled-in cart, which
+     * is almost certainly what happened to several people during the sale.
+     *
+     * Asking again gets a different pair of letters. Three attempts makes the
+     * odds vanishing, and the real fix — numbers handed out one at a time —
+     * belongs in the CRM, where the counter lives.
+     */
+    let order: { id: string; order_number: string } | null = null;
+    let orderNumber = "";
+    let orderError: { message: string; code?: string } | null = null;
 
-    if (orderError) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      orderNumber = await generateOrderNumber();
+      const result = await supabase
+        .from("orders")
+        .insert({
+          order_number: orderNumber,
+          status: "pending",
+          payment_method,
+          payment_status: "pending",
+          items,
+          shipping,
+          source: source || "Direct",
+          subtotal: verifiedTotal,
+          shipping_cost: serverShippingCost,
+          discount: serverDiscount,
+          voucher_code: voucher_code || null,
+          total: serverTotal,
+        })
+        .select()
+        .single();
+
+      if (!result.error) { order = result.data; orderError = null; break; }
+
+      orderError = result.error;
+      // 23505 is Postgres' unique violation. Anything else will not improve
+      // by being sent again.
+      const taken = result.error.code === "23505" || /duplicate key|unique/i.test(result.error.message);
+      if (!taken) break;
+      console.warn(`[Checkout] Order number ${orderNumber} was already taken; asking for another`);
+    }
+
+    if (orderError || !order) {
       console.error("Order creation error:", orderError);
       return Response.json({ error: "Failed to create order" }, { status: 500 });
     }
