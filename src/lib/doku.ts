@@ -90,14 +90,19 @@ export function dokuSafeText(raw: string | null | undefined, fallback = ""): str
     (ch) => LOOKALIKES[ch] ?? " ",
   );
 
+  // An allowlist, not a list of things to remove.
+  //
+  // DOKU says only "Cannot contain special character" and does not publish
+  // which ones, so guessing at a blocklist means waiting for the next refused
+  // character to appear in a customer's address. Letters, digits and the
+  // handful of marks that genuinely occur in Malaysian names and addresses
+  // are kept — "No 12/3", "O'Brien", "Jalan Sri-Hartamas" — and everything
+  // else becomes a space, whatever it turns out to be.
   const ascii = replaced
-    // Anything still outside plain ASCII is dropped — Chinese, emoji, accents.
-    .replace(/[^\x20-\x7E]/g, " ")
-    // Punctuation DOKU has been seen to reject even in ASCII.
-    .replace(/[|\\^~`<>{}\[\]]/g, " ")
+    .replace(/[^A-Za-z0-9 .,'\-/()]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
-    // A trailing or doubled comma is what stripping a Chinese city leaves.
+    // A doubled or trailing comma is what removing a Chinese city leaves.
     .replace(/\s*,\s*(?=,)/g, "")
     .replace(/^[,\s]+|[,\s]+$/g, "");
 
