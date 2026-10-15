@@ -577,6 +577,18 @@ export default function AdminProducts() {
                         <input type="number" step="0.01" className="w-28 pl-9 pr-2 py-2 border border-green-200 rounded-lg text-sm bg-green-50/50" placeholder="Sub price" value={v.subscription_price || ""} onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], subscription_price: e.target.value ? parseFloat(e.target.value) : null }; setVariations(u); }} />
                       </div>
                     )}
+                    {/* A cap on the offer, not on stock: a package can be a
+                        limited run while the bottles inside it keep selling.
+                        Counted on paid orders, so abandoned carts never use
+                        one up. Blank means unlimited. */}
+                    <div className="relative" title="Withdraw this option after this many paid orders. Blank = unlimited.">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-amber-600">Max</span>
+                      <input type="number" min="1" step="1"
+                        className="w-24 pl-10 pr-2 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50/40"
+                        placeholder="∞"
+                        value={v.max_orders ?? ""}
+                        onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], max_orders: e.target.value ? parseInt(e.target.value) : null }; setVariations(u); }} />
+                    </div>
                     <button onClick={() => setVariations(variations.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
                   </div>
                 ))}

@@ -3,6 +3,14 @@ export interface ProductVariation {
   price: number;
   sale_price?: number | null;
   subscription_price?: number | null;
+  /**
+   * The most paid orders this option may appear in before it is withdrawn.
+   *
+   * For a promotion sold as a limited run — sixty sets of a package — where
+   * stock cannot express the limit, because the shelf holds bottles and the
+   * limit is on the offer. Absent or zero means unlimited.
+   */
+  max_orders?: number | null;
 }
 
 // Multi-attribute variation system (e.g., size + color = 1 price)

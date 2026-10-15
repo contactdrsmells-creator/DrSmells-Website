@@ -62,6 +62,29 @@ export default function ProductPage() {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [siteImages, setSiteImages] = useState<Record<string, string>>({});
   const [selectedSize, setSelectedSize] = useState("");
+  /**
+   * Which options are limited runs, and how many are left.
+   *
+   * Asked of the server rather than rendered with the page, because the page
+   * is cached and a promotion that sold out ten minutes ago would still be
+   * offered. A failure leaves every option buyable, which is the right way to
+   * fail: checkout refuses a sold-out option regardless, so the worst case is
+   * one customer told at the last step instead of the first.
+   */
+  const [availability, setAvailability] = useState<Record<string, { remaining: number; soldOut: boolean }>>({});
+
+  // Keyed on the product once it has been resolved, not on the address bar:
+  // a slug containing a plus sign reaches this page with it turned into a
+  // space, and a lookup on that finds nothing.
+  useEffect(() => {
+    if (!product?.slug) return;
+    let cancelled = false;
+    fetch(`/api/products/availability?slug=${encodeURIComponent(product.slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d?.availability) setAvailability(d.availability); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [product?.slug]);
   const [selectedAttrs, setSelectedAttrs] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   // The box is allowed to sit empty while it is being retyped, so its text is
@@ -441,11 +464,35 @@ export default function ProductPage() {
               <div className="mb-5">
                 <p className="text-xs font-semibold text-olive uppercase tracking-wide mb-2">Size</p>
                 <div className={stackSizes ? "flex flex-col gap-2" : "flex flex-wrap gap-2"}>
-                  {product.sizes.map((size) => (
-                    <button key={size} onClick={() => setSelectedSize(size)}
-                      className={`text-sm font-medium transition-all ${stackSizes ? "w-full text-left px-5 py-3 rounded-2xl" : "px-5 py-2.5 rounded-full"} ${selectedSize === size ? "bg-olive text-white" : "bg-gray-100 text-olive/70 hover:bg-gray-200"}`}
-                    >{size}</button>
-                  ))}
+                  {product.sizes.map((size) => {
+                    const left = availability[size];
+                    const gone = Boolean(left?.soldOut);
+                    return (
+                      <button key={size} onClick={() => { if (!gone) setSelectedSize(size); }}
+                        disabled={gone}
+                        className={`text-sm font-medium transition-all ${stackSizes ? "w-full text-left px-5 py-3 rounded-2xl" : "px-5 py-2.5 rounded-full"} ${
+                          gone
+                            ? "bg-gray-100 text-olive/35 line-through cursor-not-allowed"
+                            : selectedSize === size
+                              ? "bg-olive text-white"
+                              : "bg-gray-100 text-olive/70 hover:bg-gray-200"
+                        }`}
+                      >
+                        <span className={stackSizes ? "flex items-center justify-between gap-3" : ""}>
+                          <span>{size}</span>
+                          {gone ? (
+                            <span className="ml-2 text-xs no-underline font-semibold">Sold out</span>
+                          ) : left && left.remaining <= 10 ? (
+                            /* Only when it is nearly gone. A count shown from the
+                               first day reads as a target rather than as scarcity. */
+                            <span className="ml-2 text-xs font-semibold text-amber-600">
+                              {left.remaining} left
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}

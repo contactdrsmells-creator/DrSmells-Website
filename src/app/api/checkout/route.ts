@@ -6,6 +6,7 @@ import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
 import { countPaidVoucherUses } from "@/lib/voucher-usage";
 import { voucherWindow } from "@/lib/voucher-dates";
+import { variationIsAvailable } from "@/lib/variation-limits";
 import { findZone, quoteShipping, readShippingRates, type ProductShippingRates, type ShippingZone } from "@/lib/shipping";
 import { getCustomerSession } from "@/lib/customer-auth";
 import { getBalance, getRules, redeemableFor, spendForOrder } from "@/lib/points";
@@ -100,6 +101,19 @@ export async function POST(request: Request) {
 
       if (!product) {
         return Response.json({ error: `Product not found: ${item.product_name}` }, { status: 400 });
+      }
+
+      // A limited run that has sold out. Checked here rather than trusted from
+      // the page, which was drawn when the shopper opened it and may be an
+      // hour old by the time they pay.
+      if (item.variation) {
+        const left = await variationIsAvailable(supabase, product.variations, item.variation);
+        if (!left.ok) {
+          return Response.json(
+            { error: `Sorry, "${item.variation}" has sold out. Please choose another option.` },
+            { status: 409 },
+          );
+        }
       }
 
       // Bundles price via variation_combos and have no variations at all, so
