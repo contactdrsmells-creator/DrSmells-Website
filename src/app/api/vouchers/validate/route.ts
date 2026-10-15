@@ -14,15 +14,30 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data: voucher, error } = await supabase
+
+    // Spaces are stripped, not just trimmed. People read "EMMELEY10" off a
+    // poster and type "EMMELEY 10", and being told a code they were given is
+    // invalid reads as the shop's mistake rather than a typo.
+    const typed = String(code).replace(/\s+/g, "").toUpperCase();
+
+    // Looked up without the active filter, so a code that exists but cannot
+    // be used can say which of those two it is. Folding them together told a
+    // customer holding a real, spent code that it was never a code at all.
+    const { data: voucher } = await supabase
       .from("vouchers")
       .select("*")
-      .eq("code", code.trim().toUpperCase())
-      .eq("active", true)
-      .single();
+      .ilike("code", typed)
+      .maybeSingle();
 
-    if (error || !voucher) {
+    if (!voucher) {
       return Response.json({ valid: false, error: "Invalid voucher code" });
+    }
+
+    if (!voucher.active) {
+      return Response.json({
+        valid: false,
+        error: "This voucher is no longer available",
+      });
     }
 
     // Both ends inclusive, and read as days in Malaysia. The message names
@@ -35,7 +50,7 @@ export async function POST(request: Request) {
     // Counted from paid orders, so a limit is spent by sales rather than by
     // people who applied the code and never paid.
     if (voucher.max_uses && (await countPaidVoucherUses(supabase, voucher.code)) >= voucher.max_uses) {
-      return Response.json({ valid: false, error: "This voucher has been fully redeemed" });
+      return Response.json({ valid: false, error: "This voucher is fully redeemed" });
     }
 
     if (voucher.min_order_amount && subtotal < voucher.min_order_amount) {
