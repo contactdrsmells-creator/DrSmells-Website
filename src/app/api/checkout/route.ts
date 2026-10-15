@@ -498,7 +498,15 @@ export async function POST(request: Request) {
           .update({ payment_reference: checkout.checkoutId, payment_url: redirect_url || null })
           .eq("id", order.id);
       } catch {
-        return Response.json({ error: "Failed to create DOKU checkout" }, { status: 500 });
+        // The order exists; only the gateway's checkout could not be made. An
+        // error here threw away a filled-in address and a chosen cart over
+        // something that usually works on the next attempt — during a flash
+        // sale that was one customer in five, each of them simply gone.
+        //
+        // /pay mints a fresh checkout of its own, so sending them there is a
+        // second attempt that costs them a page load rather than the sale.
+        console.error(`DOKU checkout failed for ${orderNumber}; sending to /pay to retry`);
+        redirect_url = `${origin}/pay/${orderNumber}`;
       }
     }
 

@@ -145,26 +145,72 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
     `Digest:${digest}`;
   const signature = createHmac("sha256", secretKey).update(componentSignature).digest("base64");
 
-  const res = await fetch(`${baseUrl}/v3/checkouts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Client-Id": clientId,
-      "Request-Id": checkoutId,
-      "Request-Timestamp": timestamp,
-      "Signature": `HMACSHA256=${signature}`,
-      "Authorization": `Basic ${Buffer.from(apiKey).toString("base64")}`,
-      "API-Version": "arabica.2025-12-01",
-    },
-    body: bodyString,
-  });
+  /**
+   * Asked more than once before giving up.
+   *
+   * During a flash sale one checkout in five was refused — the failures fell
+   * exactly on the busiest minutes, which is throttling rather than anything
+   * wrong with the order. Each one showed a customer who had filled in their
+   * whole address "Failed to create DOKU checkout" and left the sale.
+   *
+   * A refusal that is the gateway's own trouble is worth asking again about; a
+   * refusal that is the request's fault will say the same thing however many
+   * times it is sent, so only the first kind is retried.
+   *
+   * The signed headers are reused deliberately. The signature covers this
+   * exact body and request id, and DOKU treats a repeat of the same id as the
+   * same checkout — so a retry cannot leave two checkouts behind for one
+   * order, which is what re-signing each attempt would risk.
+   */
+  const RETRY_DELAYS_MS = [400, 1200];
+  let res: Response | null = null;
+  let lastError = "";
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
+      console.warn(`DOKU checkout retry ${attempt} for order=${input.orderNumber}`);
+    }
+
+    try {
+      res = await fetch(`${baseUrl}/v3/checkouts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Client-Id": clientId,
+          "Request-Id": checkoutId,
+          "Request-Timestamp": timestamp,
+          "Signature": `HMACSHA256=${signature}`,
+          "Authorization": `Basic ${Buffer.from(apiKey).toString("base64")}`,
+          "API-Version": "arabica.2025-12-01",
+        },
+        body: bodyString,
+        // A gateway that has stopped answering should free the customer to try
+        // again rather than hold the page until something else times out.
+        signal: AbortSignal.timeout(12_000),
+      });
+    } catch (err) {
+      // A dropped connection or a timeout: nothing was refused, so ask again.
+      lastError = (err as Error).message;
+      console.error(`DOKU checkout unreachable order=${input.orderNumber}:`, lastError);
+      continue;
+    }
+
+    if (res.ok) break;
+
+    lastError = await res.text().catch(() => "");
     console.error(
       `DOKU checkout failed [${res.status}] order=${input.orderNumber} amount=${input.total}:`,
-      errText,
+      lastError,
     );
+
+    // Too many requests, or the gateway's own fault: worth asking again.
+    // Anything else is a refusal of this order and will not change.
+    const worthRetrying = res.status === 429 || res.status >= 500;
+    if (!worthRetrying) break;
+  }
+
+  if (!res || !res.ok) {
     throw new Error("Failed to create DOKU checkout");
   }
 
