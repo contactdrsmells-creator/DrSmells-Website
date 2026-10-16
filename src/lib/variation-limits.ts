@@ -32,6 +32,43 @@ export interface VariationAvailability {
 }
 
 /**
+ * Sales of these options that the shop never saw.
+ *
+ * An order taken over WhatsApp lives in the CRM and nowhere else, so a cap
+ * counted from this database alone oversells by however many went through
+ * chat — 配套 B read 247 here when 256 had actually gone.
+ *
+ * Asked once for every option rather than once each, and a failure answers
+ * zero rather than throwing: a CRM that cannot be reached should make a cap
+ * slightly generous, never stop the shop from selling.
+ */
+export async function chatSalesFor(variations: string[]): Promise<Record<string, number>> {
+  const url = process.env.CRM_WEBHOOK_URL;
+  const secret = process.env.CRM_WEBHOOK_SECRET;
+  if (!url || !secret || !variations.length) return {};
+
+  // Shares a host with the other webhooks; only the last segment differs.
+  const endpoint = url.replace(/\/[^/]*$/, "/variation-sales");
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-webhook-secret": secret },
+      body: JSON.stringify({ variations }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) {
+      console.error("[Limits] CRM refused the variation count:", res.status);
+      return {};
+    }
+    return (await res.json())?.sold || {};
+  } catch (err) {
+    console.error("[Limits] CRM unreachable for variation counts:", (err as Error).message);
+    return {};
+  }
+}
+
+/**
  * How many paid orders hold this exact option.
  *
  * Matched by JSON containment on the order's own lines, so it reads what was
@@ -76,11 +113,15 @@ export async function availabilityFor(
 ): Promise<Record<string, VariationAvailability>> {
   const out: Record<string, VariationAvailability> = {};
 
-  for (const variation of variations || []) {
-    const limit = limitOf(variation);
-    if (limit === null) continue;
+  const capped = (variations || []).filter((v) => limitOf(v) !== null);
+  // One round trip for all of them, not one each.
+  const chat = await chatSalesFor(capped.map((v) => v.name));
 
-    const sold = await countPaidForVariation(db, variation.name);
+  for (const variation of capped) {
+    const limit = limitOf(variation)!;
+
+    const own = await countPaidForVariation(db, variation.name);
+    const sold = Number.isFinite(own) ? own + (chat[variation.name] || 0) : own;
     const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
     out[variation.name] = {
       limit,
@@ -109,7 +150,9 @@ export async function variationIsAvailable(
   const limit = limitOf(variation);
   if (limit === null) return { ok: true };
 
-  const sold = await countPaidForVariation(db, name);
+  const own = await countPaidForVariation(db, name);
+  const chat = (await chatSalesFor([name]))[name] || 0;
+  const sold = Number.isFinite(own) ? own + chat : own;
   const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
   return { ok: remaining > 0, remaining };
 }

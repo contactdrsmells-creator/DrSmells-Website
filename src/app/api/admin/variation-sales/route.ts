@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { requirePermission } from "@/lib/admin-auth";
-import { countPaidForVariation } from "@/lib/variation-limits";
+import { chatSalesFor, countPaidForVariation } from "@/lib/variation-limits";
 import type { ProductVariation } from "@/lib/types";
 
 /**
@@ -9,6 +9,10 @@ import type { ProductVariation } from "@/lib/types";
  * Every variation, not only the capped ones: the number is there to decide a
  * cap by, so it has to be on screen before one exists. Typing 85 into an
  * empty box should show at once that 61 have already gone.
+ *
+ * Counts chat orders too. A package sold over WhatsApp never reaches the
+ * shop's database, so a figure taken from here alone would disagree with the
+ * cap that is actually enforced.
  *
  * Separate from the shop's own availability endpoint, which deliberately
  * withholds counts until stock is nearly gone. This is the boss's view.
@@ -32,11 +36,16 @@ export async function GET(request: Request) {
     .maybeSingle();
   if (!product) return Response.json({ sold: {} });
 
+  const names = ((product.variations || []) as ProductVariation[])
+    .map((v) => v?.name)
+    .filter((n): n is string => Boolean(n));
+
+  const chat = await chatSalesFor(names);
+
   const sold: Record<string, number> = {};
-  for (const v of (product.variations || []) as ProductVariation[]) {
-    if (!v?.name) continue;
-    const n = await countPaidForVariation(db, v.name);
-    sold[v.name] = Number.isFinite(n) ? n : 0;
+  for (const name of names) {
+    const own = await countPaidForVariation(db, name);
+    sold[name] = (Number.isFinite(own) ? own : 0) + (chat[name] || 0);
   }
   return Response.json({ sold });
 }
