@@ -40,21 +40,14 @@ export interface VariationAvailability {
 export async function countPaidForVariation(
   db: SupabaseClient,
   variation: string,
-  since?: string | null,
 ): Promise<number> {
   if (!variation) return 0;
 
-  let query = db
+  const { count, error } = await db
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("payment_status", "paid")
     .filter("items", "cs", JSON.stringify([{ variation }]));
-
-  // Only sales made since the cap was set. Raising a limit from 60 to 100 is
-  // a decision about the next 100, not a recount of everything ever sold.
-  if (since) query = query.gte("created_at", since);
-
-  const { count, error } = await query;
 
   if (error) {
     console.error(`[Limits] Could not count sales of "${variation}":`, error.message);
@@ -87,7 +80,7 @@ export async function availabilityFor(
     const limit = limitOf(variation);
     if (limit === null) continue;
 
-    const sold = await countPaidForVariation(db, variation.name, variation.max_orders_from);
+    const sold = await countPaidForVariation(db, variation.name);
     const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
     out[variation.name] = {
       limit,
@@ -116,7 +109,7 @@ export async function variationIsAvailable(
   const limit = limitOf(variation);
   if (limit === null) return { ok: true };
 
-  const sold = await countPaidForVariation(db, name, variation?.max_orders_from);
+  const sold = await countPaidForVariation(db, name);
   const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
   return { ok: remaining > 0, remaining };
 }

@@ -11,14 +11,7 @@ export interface ProductVariation {
    * limit is on the offer. Absent or zero means unlimited.
    */
   max_orders?: number | null;
-  /**
-   * When this cap started counting, set whenever the cap is changed.
-   *
-   * A cap is a decision taken today about what happens from today. Counting
-   * sales that happened before it was set means a limit of 100 can be
-   * exhausted the moment it is typed, which is never what was meant.
-   */
-  max_orders_from?: string | null;
+
 }
 
 // Multi-attribute variation system (e.g., size + color = 1 price)
