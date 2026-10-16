@@ -482,11 +482,18 @@ export default function ProductPage() {
                           <span>{size}</span>
                           {gone ? (
                             <span className="ml-2 text-xs no-underline font-semibold">Sold out</span>
-                          ) : left && left.remaining <= 10 ? (
-                            /* Only when it is nearly gone. A count shown from the
-                               first day reads as a target rather than as scarcity. */
-                            <span className="ml-2 text-xs font-semibold text-amber-600">
-                              {left.remaining} left
+                          ) : left ? (
+                            /* How many are left, never how many there were. A
+                               limited run is more persuasive for being
+                               limited, and the size of the run is ours to
+                               know — "46 of 100" invites the arithmetic of
+                               how slowly it is selling. */
+                            <span
+                              className={`ml-2 text-xs font-semibold ${
+                                left.remaining <= 10 ? "text-red-600" : "text-amber-600"
+                              }`}
+                            >
+                              {left.remaining} unit{left.remaining === 1 ? "" : "s"} available
                             </span>
                           ) : null}
                         </span>
