@@ -115,12 +115,20 @@ export async function POST(request: Request) {
       // the page, which was drawn when the shopper opened it and may be an
       // hour old by the time they pay.
       if (item.variation) {
-        const left = await variationIsAvailable(supabase, product.variations, item.variation);
+        const left = await variationIsAvailable(
+          supabase,
+          product.variations,
+          item.variation,
+          item.quantity,
+        );
         if (!left.ok) {
-          return Response.json(
-            { error: `Sorry, "${item.variation}" has sold out. Please choose another option.` },
-            { status: 409 },
-          );
+          // A basket asking for more than is left is told the number, because
+          // the shopper can act on it — reducing the quantity gets them paid.
+          // "Sold out" when three remain would send them away for nothing.
+          const error = left.remaining
+            ? `Sorry, only ${left.remaining} of "${item.variation}" ${left.remaining === 1 ? "is" : "are"} left. Please reduce the quantity.`
+            : `Sorry, "${item.variation}" has sold out. Please choose another option.`;
+          return Response.json({ error }, { status: 409 });
         }
       }
 

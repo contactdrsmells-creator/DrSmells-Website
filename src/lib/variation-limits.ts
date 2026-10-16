@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProductVariation } from "@/lib/types";
+import { readAll } from "@/lib/paged";
 
 /**
  * A cap on how many of one option may be sold.
@@ -9,10 +10,10 @@ import type { ProductVariation } from "@/lib/types";
  * themselves afterwards. Stock cannot express that — the shelf holds bottles,
  * not promotions — so the limit belongs to the option the customer picks.
  *
- * Counted on paid orders, the same rule as a voucher's usage. A checkout that
- * was started and abandoned must not consume somebody else's set: on a shop
- * where a quarter of checkouts are abandoned, counting attempts would close
- * the promotion with a third of it unsold.
+ * Counted in units on paid orders, the same rule as a voucher's usage. A
+ * checkout that was started and abandoned must not consume somebody else's
+ * set: on a shop where a quarter of checkouts are abandoned, counting attempts
+ * would close the promotion with a third of it unsold.
  *
  * The trade-off is the same one too. The count is of sales that completed, so
  * more people can be partway through checkout than there are sets left, and a
@@ -24,7 +25,7 @@ import type { ProductVariation } from "@/lib/types";
 export interface VariationAvailability {
   /** The cap the shop set, or null where the option is unlimited. */
   limit: number | null;
-  /** Paid orders containing this option. */
+  /** Units of this option on paid orders — quantities, not orders. */
   sold: number;
   /** null when unlimited. Never negative. */
   remaining: number | null;
@@ -69,10 +70,15 @@ export async function chatSalesFor(variations: string[]): Promise<Record<string,
 }
 
 /**
- * How many paid orders hold this exact option.
+ * How many of this option were sold on paid orders.
  *
- * Matched by JSON containment on the order's own lines, so it reads what was
- * actually bought rather than re-deriving it from a name.
+ * Counted in units, not in orders. Somebody buying five refill packs takes
+ * five off a cap of fifty, and counting the order instead of its quantity read
+ * that as one — a cap of fifty would have let through far more than fifty.
+ *
+ * Narrowed by JSON containment first so only orders that actually hold this
+ * option are read, then summed from their own lines: containment can say an
+ * order contains the option but not how many of it.
  */
 export async function countPaidForVariation(
   db: SupabaseClient,
@@ -80,19 +86,36 @@ export async function countPaidForVariation(
 ): Promise<number> {
   if (!variation) return 0;
 
-  const { count, error } = await db
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("payment_status", "paid")
-    .filter("items", "cs", JSON.stringify([{ variation }]));
-
-  if (error) {
-    console.error(`[Limits] Could not count sales of "${variation}":`, error.message);
+  let rows: { items: unknown }[];
+  try {
+    rows = await readAll<{ items: unknown }>(
+      (from, to) =>
+        db
+          .from("orders")
+          .select("items")
+          .eq("payment_status", "paid")
+          .filter("items", "cs", JSON.stringify([{ variation }]))
+          .range(from, to),
+      { what: `sales of "${variation}"` },
+    );
+  } catch (err) {
+    console.error(`[Limits] Could not count sales of "${variation}":`, (err as Error).message);
     // An unknown count must not be read as room left; the caller treats
     // Infinity as "cannot confirm there is any".
     return Number.POSITIVE_INFINITY;
   }
-  return count || 0;
+
+  let units = 0;
+  for (const row of rows) {
+    const lines = Array.isArray(row.items) ? (row.items as { variation?: string; quantity?: unknown }[]) : [];
+    for (const line of lines) {
+      if (line?.variation !== variation) continue;
+      // A line that somehow carries no quantity is still one of them sold.
+      const quantity = Number(line.quantity);
+      units += Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
+    }
+  }
+  return units;
 }
 
 /** The cap a variation carries, or null where it has none. */
@@ -140,11 +163,16 @@ export async function availabilityFor(
  * Separate from the listing above because the two have different jobs: the
  * listing describes a page, this decides an order, and only the second one has
  * to be right at the instant it is asked.
+ *
+ * Asked about a quantity rather than about emptiness. "Is there any left" let
+ * a basket of ten through on the last remaining set, which is the one case a
+ * cap exists to stop.
  */
 export async function variationIsAvailable(
   db: SupabaseClient,
   variations: ProductVariation[] | null | undefined,
   name: string,
+  wanted = 1,
 ): Promise<{ ok: boolean; remaining?: number }> {
   const variation = (variations || []).find((v) => v.name === name);
   const limit = limitOf(variation);
@@ -154,5 +182,6 @@ export async function variationIsAvailable(
   const chat = (await chatSalesFor([name]))[name] || 0;
   const sold = Number.isFinite(own) ? own + chat : own;
   const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
-  return { ok: remaining > 0, remaining };
+  const asked = Number.isFinite(wanted) && wanted > 0 ? Math.floor(wanted) : 1;
+  return { ok: remaining >= asked, remaining };
 }
