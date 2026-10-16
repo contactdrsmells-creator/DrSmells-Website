@@ -97,6 +97,17 @@ export async function POST(request: Request) {
       const orderNumber = subscription.metadata?.order_number;
 
       if (orderNumber) {
+        // Never to an order that was paid. A subscription ending means no
+        // further deliveries — it does not unsay the first one. That order was
+        // charged, packed and posted months ago, and marking it cancelled
+        // would have taken a real sale out of the revenue the day the customer
+        // chose not to continue.
+        //
+        // Nothing else needs this write: renewals stop because Stripe stops
+        // billing, and the member area reads each subscription's status from
+        // Stripe rather than from here. What remains is the case this was
+        // presumably meant for — a subscription abandoned before its first
+        // payment ever succeeded.
         await supabase
           .from("orders")
           .update({
@@ -104,7 +115,8 @@ export async function POST(request: Request) {
             payment_status: "cancelled",
             updated_at: new Date().toISOString(),
           })
-          .eq("order_number", orderNumber);
+          .eq("order_number", orderNumber)
+          .neq("payment_status", "paid");
       }
     }
 
