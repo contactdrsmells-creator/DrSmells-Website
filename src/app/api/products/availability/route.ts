@@ -26,9 +26,26 @@ export async function GET(request: Request) {
   if (!product) return Response.json({ availability: {} });
 
   const availability = await availabilityFor(db, product.variations);
-  const trimmed: Record<string, { remaining: number; soldOut: boolean }> = {};
+
+  /**
+   * The exact count is sent only once it is small.
+   *
+   * Above the threshold the page says the run is limited and no more, and the
+   * number does not travel either — a figure withheld from the page but left
+   * in its data is not withheld at all, it is just one tap of a browser's
+   * inspector away. Below it, the number is the point: "9 units available" is
+   * what moves somebody who has been thinking about it.
+   */
+  const SHOW_COUNT_AT_OR_BELOW = 15;
+
+  const trimmed: Record<string, { limited: true; soldOut: boolean; remaining: number | null }> = {};
   for (const [name, a] of Object.entries(availability)) {
-    trimmed[name] = { remaining: a.remaining ?? 0, soldOut: a.soldOut };
+    const left = a.remaining ?? 0;
+    trimmed[name] = {
+      limited: true,
+      soldOut: a.soldOut,
+      remaining: left <= SHOW_COUNT_AT_OR_BELOW ? left : null,
+    };
   }
   return Response.json({ availability: trimmed });
 }

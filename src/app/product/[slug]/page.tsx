@@ -71,7 +71,7 @@ export default function ProductPage() {
    * fail: checkout refuses a sold-out option regardless, so the worst case is
    * one customer told at the last step instead of the first.
    */
-  const [availability, setAvailability] = useState<Record<string, { remaining: number; soldOut: boolean }>>({});
+  const [availability, setAvailability] = useState<Record<string, { limited: boolean; soldOut: boolean; remaining: number | null }>>({});
 
   // Keyed on the product once it has been resolved, not on the address bar:
   // a slug containing a plus sign reaches this page with it turned into a
@@ -482,18 +482,17 @@ export default function ProductPage() {
                           <span>{size}</span>
                           {gone ? (
                             <span className="ml-2 text-xs no-underline font-semibold">Sold out</span>
-                          ) : left ? (
-                            /* How many are left, never how many there were. A
-                               limited run is more persuasive for being
-                               limited, and the size of the run is ours to
-                               know — "46 of 100" invites the arithmetic of
-                               how slowly it is selling. */
-                            <span
-                              className={`ml-2 text-xs font-semibold ${
-                                left.remaining <= 10 ? "text-red-600" : "text-amber-600"
-                              }`}
-                            >
+                          ) : left?.remaining != null ? (
+                            /* Close enough to the end that the number itself
+                               is the argument. */
+                            <span className="ml-2 text-xs font-semibold text-red-600">
                               {left.remaining} unit{left.remaining === 1 ? "" : "s"} available
+                            </span>
+                          ) : left?.limited ? (
+                            /* Still plenty. That the run is finite is worth
+                               saying; how finite is ours to know. */
+                            <span className="ml-2 text-xs font-semibold text-amber-600">
+                              Stock limited
                             </span>
                           ) : null}
                         </span>
