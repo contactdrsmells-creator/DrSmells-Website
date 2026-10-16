@@ -151,6 +151,28 @@ function verdictFor(order: { payment_status: string; total: number }, answer: Pr
   return { verdict: "ok" };
 }
 
+/**
+ * Which gateway actually holds this payment.
+ *
+ * The order's payment_method says which was chosen, and until the resume route
+ * was fixed it could be stale: an Atome order retried through the payment link
+ * was charged at DOKU while still recording "atome". Asking Atome about it
+ * returned the abandoned Atome attempt, CANCELLED, and a paid order was
+ * reported as one to hold back from shipping.
+ *
+ * The reference settles it, because each gateway writes its own shape — DOKU a
+ * UUID, Atome an MTX number, Stripe a cs_ or pi_ prefix. Where it says nothing
+ * (an order that was never paid still carries its own number), the chosen
+ * method stands.
+ */
+function providerHolding(order: { payment_method: string; payment_reference: string | null }): string {
+  const ref = String(order.payment_reference || "").trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref)) return "doku";
+  if (/^MTX\d+/.test(ref)) return "atome";
+  if (ref.startsWith("cs_") || ref.startsWith("pi_")) return "stripe";
+  return order.payment_method;
+}
+
 /** Asked a handful at a time: a provider will throttle a few hundred at once. */
 async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
@@ -197,17 +219,19 @@ export async function auditPayments(
   const subset = orders.slice(0, limit);
 
   const rows = await inBatches(subset, 5, async (order): Promise<AuditRow> => {
+    const holder = providerHolding(order);
     const answer =
-      order.payment_method === "atome"
+      holder === "atome"
         ? await askAtome(order.order_number)
-        : order.payment_method === "stripe"
+        : holder === "stripe"
           ? await askStripe(order.payment_reference)
           : await askDoku(order.order_number);
 
     const { verdict, note } = verdictFor(order, answer);
     return {
       order_number: order.order_number,
-      payment_method: order.payment_method,
+      // What was asked, which is not always what was chosen.
+      payment_method: holder,
       website_status: order.payment_status,
       provider_status: answer.status,
       website_total: Number(order.total) || 0,

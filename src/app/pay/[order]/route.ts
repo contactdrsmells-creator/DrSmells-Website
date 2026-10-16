@@ -273,11 +273,20 @@ export async function GET(
 
     // Keep the newest link on the order so admin and any later reminder show
     // the one that actually works.
+    //
+    // And record which gateway it now belongs to. Everything that is not
+    // Stripe resumes through DOKU, so an Atome order that is retried is paid
+    // at DOKU while the order still said "atome" — the reconciliation then
+    // asked Atome, was told the abandoned Atome attempt was CANCELLED, and
+    // reported a paid order as unpaid. The money had arrived; only the record
+    // was wrong, and a record that names the wrong gateway also misreports
+    // which gateway earned the revenue.
     await supabase
       .from("orders")
       .update({
         payment_url: checkoutUrl,
         payment_url_created_at: new Date().toISOString(),
+        payment_method: usesStripe ? "stripe" : "doku",
         ...(reference ? { payment_reference: reference } : {}),
       })
       .eq("id", order.id);
