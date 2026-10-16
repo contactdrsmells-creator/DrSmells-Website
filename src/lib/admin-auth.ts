@@ -13,7 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 
 // Roles live in admin-roles.ts so the browser can import them without pulling
 // in next/headers. Re-exported so server code has a single import site.
-import { AdminSession, ROLE_LABELS, hasPermission } from "./admin-roles";
+import { AdminRole, AdminSession, ROLE_LABELS, hasPermission } from "./admin-roles";
 
 export * from "./admin-roles";
 
@@ -58,14 +58,48 @@ function verifySessionToken(token: string | undefined): (AdminSession & { exp: n
   }
 }
 
-/** The signed-in admin, or null. */
+/**
+ * The signed-in admin, or null.
+ *
+ * The cookie says who this is; the database says what they may do. The role
+ * used to be read straight off the cookie, which is written once at sign-in
+ * and then trusted for a week — so changing somebody's role did nothing until
+ * they happened to sign in again. A super admin promoted this morning still
+ * saw a viewer's single Orders page, and, the other way round, somebody
+ * demoted or disabled kept full control for up to seven days.
+ *
+ * So the role and the account's standing are looked up each time. That is one
+ * small query per admin request, which the admin panel can afford and the shop
+ * front never pays — nothing here runs on a customer's page.
+ */
 export async function getAdminSession(): Promise<AdminSession | null> {
   const store = await cookies();
   const verified = verifySessionToken(store.get(COOKIE)?.value);
   if (!verified) return null;
 
   const { id, email, name, role } = verified;
-  return { id, email, name, role };
+
+  // The bootstrap sign-in has no row to check: it is accepted only while no
+  // active super admin exists, and the login route settles that.
+  if (id === "bootstrap") return { id, email, name, role };
+
+  const { data, error } = await getSupabase()
+    .from("admin_users")
+    .select("role, active, name")
+    .eq("id", id)
+    .maybeSingle();
+
+  // No row means the account was removed, and a failed lookup means the
+  // account cannot be vouched for. Both refuse: a stale cookie granting
+  // access is the failure worth avoiding, and the cost of being wrong is one
+  // sign-in, not a lost order.
+  if (error) {
+    console.error("[Admin] Could not confirm the signed-in account:", error.message);
+    return null;
+  }
+  if (!data || !data.active) return null;
+
+  return { id, email, name: data.name || name, role: data.role as AdminRole };
 }
 
 /**
