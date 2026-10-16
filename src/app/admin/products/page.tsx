@@ -47,6 +47,8 @@ export default function AdminProducts() {
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [variations, setVariations] = useState<ProductVariation[]>([]);
+  /** How many of each capped option have sold, shown beside the Max box. */
+  const [capSales, setCapSales] = useState<Record<string, { sold: number; limit: number }>>({});
   const [varAttrs, setVarAttrs] = useState<VariationAttribute[]>([]);
   const [varCombos, setVarCombos] = useState<VariationCombo[]>([]);
   const [subEnabled, setSubEnabled] = useState(false);
@@ -96,6 +98,13 @@ export default function AdminProducts() {
       related_products: product.related_products || [],
     });
     setVariations(product.variations || (product.sizes || []).map((s) => ({ name: s, price: product.price, sale_price: product.sale_price })));
+    setCapSales({});
+    if (product.id) {
+      fetch(`/api/admin/variation-sales?id=${product.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d?.sales) setCapSales(d.sales); })
+        .catch(() => {});
+    }
     setVarAttrs(product.variation_attributes || []);
     setVarCombos(product.variation_combos || []);
     setSubEnabled(product.subscription_enabled || false);
@@ -209,6 +218,31 @@ export default function AdminProducts() {
     setEditing({ ...editing, images: imgs, image_url: imgs[0] || null });
   }
 
+  /**
+   * Marks when a cap started counting.
+   *
+   * A cap is a decision taken today about what happens from today. Counting
+   * sales from before it was typed means a limit of 100 can be exhausted the
+   * moment it is saved, which is never what was meant. Only a changed cap is
+   * restamped — re-saving a product for an unrelated reason leaves its
+   * counters where they are.
+   */
+  function stampCapChanges(
+    next: ProductVariation[],
+    before: ProductVariation[] | undefined,
+  ): ProductVariation[] {
+    const was = new Map((before || []).map((v) => [v.name, v]));
+    const now = new Date().toISOString();
+    return next.map((v) => {
+      const prev = was.get(v.name);
+      const cap = v.max_orders ?? null;
+      const hadCap = prev?.max_orders ?? null;
+      if (cap === null) return { ...v, max_orders: null, max_orders_from: null };
+      if (cap !== hadCap) return { ...v, max_orders_from: now };
+      return { ...v, max_orders_from: prev?.max_orders_from ?? now };
+    });
+  }
+
   async function handleSave() {
     if (!editing || !isConfigured) { alert("Connect Supabase first."); return; }
     setSaving(true);
@@ -238,7 +272,8 @@ export default function AdminProducts() {
       short_description: editing.short_description, price: basePrice,
       sale_price: baseSalePrice, category: categories[0] || "underarm", categories,
       related_products: editing.related_products || [],
-      image_url: images[0] || editing.image_url || null, images, sizes, variations,
+      image_url: images[0] || editing.image_url || null, images, sizes,
+      variations: stampCapChanges(variations, products.find((p) => p.id === editing.id)?.variations),
       variation_attributes: varAttrs.length > 0 ? varAttrs : null,
       variation_combos: varCombos.length > 0 ? varCombos : null,
       subscription_enabled: subEnabled,
@@ -581,13 +616,28 @@ export default function AdminProducts() {
                         limited run while the bottles inside it keep selling.
                         Counted on paid orders, so abandoned carts never use
                         one up. Blank means unlimited. */}
-                    <div className="relative" title="Withdraw this option after this many paid orders. Blank = unlimited.">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-amber-600">Max</span>
-                      <input type="number" min="1" step="1"
-                        className="w-24 pl-10 pr-2 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50/40"
-                        placeholder="∞"
-                        value={v.max_orders ?? ""}
-                        onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], max_orders: e.target.value ? parseInt(e.target.value) : null }; setVariations(u); }} />
+                    {/* The cap, and how much of it has gone. Counting starts
+                        when the number is changed, so a limit raised today is
+                        a decision about the next hundred rather than a
+                        recount of everything ever sold. */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative" title="Withdraw this option after this many paid orders. Counting restarts when you change it. Blank = unlimited.">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-amber-600">Max</span>
+                        <input type="number" min="1" step="1"
+                          className="w-24 pl-10 pr-2 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50/40"
+                          placeholder="∞"
+                          value={v.max_orders ?? ""}
+                          onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], max_orders: e.target.value ? parseInt(e.target.value) : null }; setVariations(u); }} />
+                      </div>
+                      {v.max_orders && capSales[v.name] && capSales[v.name].limit === v.max_orders ? (
+                        <span className={`text-xs font-semibold whitespace-nowrap ${
+                          capSales[v.name].sold >= v.max_orders ? "text-red-600" : "text-gray-500"
+                        }`}>
+                          {capSales[v.name].sold}/{v.max_orders} sold
+                        </span>
+                      ) : v.max_orders ? (
+                        <span className="text-xs text-gray-400 whitespace-nowrap">counts from save</span>
+                      ) : null}
                     </div>
                     <button onClick={() => setVariations(variations.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
                   </div>
