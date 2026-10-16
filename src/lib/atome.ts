@@ -121,11 +121,19 @@ export async function createAtomePayment(input: AtomeCheckoutInput): Promise<Ato
 
 export interface AtomePaymentStatus {
   status: "PROCESSING" | "PAID" | "FAILED" | "REFUNDED" | "CANCELLED";
+  /** Ringgit, converted from the sen Atome answers in. */
   amount: number;
   transactionId?: string;
 }
 
-/** The payment as Atome records it — the only version of events to act on. */
+/**
+ * The payment as Atome records it — the only version of events to act on.
+ *
+ * The amount is converted back to ringgit. Atome counts in sen both ways, and
+ * handing that figure out unchanged read a RM457 payment as 45700 — which the
+ * payment check then reported as an amount mismatch against an order that was
+ * in fact correct.
+ */
 export async function getAtomePayment(referenceId: string): Promise<AtomePaymentStatus> {
   const res = await fetch(`${API_URL()}/payments/${encodeURIComponent(referenceId)}`, {
     headers: { authorization: authHeader() },
@@ -138,7 +146,7 @@ export async function getAtomePayment(referenceId: string): Promise<AtomePayment
 
   return {
     status: data.status,
-    amount: data.amount,
+    amount: typeof data.amount === "number" ? data.amount / 100 : data.amount,
     transactionId: data.paymentTransaction?.transactionId,
   };
 }
