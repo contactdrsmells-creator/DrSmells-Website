@@ -616,27 +616,27 @@ export default function AdminProducts() {
                         limited run while the bottles inside it keep selling.
                         Counted on paid orders, so abandoned carts never use
                         one up. Blank means unlimited. */}
-                    {/* The cap, and how much of it has gone. Counting starts
-                        when the number is changed, so a limit raised today is
-                        a decision about the next hundred rather than a
-                        recount of everything ever sold. */}
-                    <div className="flex items-center gap-2">
-                      <div className="relative" title="Withdraw this option after this many paid orders. Counting restarts when you change it. Blank = unlimited.">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-amber-600">Max</span>
-                        <input type="number" min="1" step="1"
-                          className="w-24 pl-10 pr-2 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50/40"
-                          placeholder="∞"
-                          value={v.max_orders ?? ""}
-                          onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], max_orders: e.target.value ? parseInt(e.target.value) : null }; setVariations(u); }} />
-                      </div>
-                      {v.max_orders && capSales[v.name] && capSales[v.name].limit === v.max_orders ? (
-                        <span className={`text-xs font-semibold whitespace-nowrap ${
+                    {/* The cap and its progress in one box, a fixed width so
+                        every row lines up whether or not a cap is set — a
+                        count hung off the end pushed the whole row wider than
+                        its neighbours. */}
+                    <div
+                      className="flex items-center gap-1.5 w-36 px-2 py-2 border border-amber-200 rounded-lg bg-amber-50/40"
+                      title="Withdraw this option after this many paid orders. Counting restarts whenever you change the number. Blank = unlimited."
+                    >
+                      <span className="text-xs text-amber-600 shrink-0">Max</span>
+                      <input
+                        type="number" min="1" step="1" placeholder="∞"
+                        className="w-10 min-w-0 flex-1 bg-transparent border-0 p-0 text-sm focus:outline-none"
+                        value={v.max_orders ?? ""}
+                        onChange={(e) => { const u = [...variations]; u[idx] = { ...u[idx], max_orders: e.target.value ? parseInt(e.target.value) : null }; setVariations(u); }}
+                      />
+                      {v.max_orders && capSales[v.name]?.limit === v.max_orders ? (
+                        <span className={`text-[11px] font-semibold shrink-0 ${
                           capSales[v.name].sold >= v.max_orders ? "text-red-600" : "text-gray-500"
                         }`}>
-                          {capSales[v.name].sold}/{v.max_orders} sold
+                          {capSales[v.name].sold}/{v.max_orders}
                         </span>
-                      ) : v.max_orders ? (
-                        <span className="text-xs text-gray-400 whitespace-nowrap">counts from save</span>
                       ) : null}
                     </div>
                     <button onClick={() => setVariations(variations.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
