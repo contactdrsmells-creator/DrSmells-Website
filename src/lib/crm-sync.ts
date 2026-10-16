@@ -44,12 +44,23 @@ export async function syncOrderToCRM(orderNumber: string) {
     ).join(", ") || "Website Order",
     quantity: items.reduce((sum: number, i: { quantity: number }) => sum + (i.quantity || 1), 0),
     amount: order.total || 0,
+    // The total split into what it is made of. A single figure cannot be
+    // checked against a courier bill or tell what a voucher cost, and the CRM
+    // was the only place the shop's own exports came from.
+    subtotal: order.subtotal || 0,
+    shipping_fee: order.shipping_cost || 0,
+    // Points spent are a discount by another name — both come off the total,
+    // and an export that showed only one would not add up.
+    discount: (order.discount || 0) + (order.points_discount || 0),
     address: shipping.address_line1 || "",
     address2: shipping.address_line2 || "",
     city: shipping.city || "",
     state: shipping.state || "",
     postcode: shipping.postcode || "",
-    country: "Malaysia",
+    // The shop ships to Singapore too, and this was written when it did not.
+    // Every Singapore order reached the CRM labelled Malaysia, so an export
+    // read as domestic and the parcel was booked on the wrong service.
+    country: shipping.country || "Malaysia",
     payment: order.payment_method || "Bank",
     // Where the customer came from (Meta, Ig, Direct…). Shown in the CRM's
     // "Sales by" column, which is otherwise empty for website orders since no

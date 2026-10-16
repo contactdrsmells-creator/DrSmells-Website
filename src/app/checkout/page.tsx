@@ -10,6 +10,7 @@ import { resolveUnitPrice } from "@/lib/pricing";
 import { trackInitiateCheckout } from "@/components/MetaPixel";
 import { getOrderSource, getMetaTrackingData, readAttribution } from "@/lib/attribution";
 import { findZone, quoteShipping, type ShippingZone } from "@/lib/shipping";
+import { checkPostcode } from "@/lib/postcode";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -141,6 +142,12 @@ export default function CheckoutPage() {
     );
   }
 
+  // Only complained about once something has been typed, so the box does not
+  // turn red before the shopper has had a chance to fill it in.
+  const postcodeCheck = shipping.postcode.trim()
+    ? checkPostcode(shipping.postcode, shipping.country)
+    : ({ ok: true } as const);
+
   const matchedZone = findZone(shippingZones, shipping.state);
   const quote = quoteShipping(
     items.map((i) => ({ name: i.product.name, rates: i.product.shipping_rates })),
@@ -215,6 +222,15 @@ export default function CheckoutPage() {
         alert(`Please fill in ${field.replace(/_/g, " ")}`);
         return;
       }
+    }
+
+    // A postcode that cannot belong to the chosen country means the country is
+    // wrong, and the order would be quoted the wrong postage and shipped on
+    // the wrong service. Stopped here rather than discovered at the packing
+    // bench.
+    if (!postcodeCheck.ok) {
+      alert(postcodeCheck.error);
+      return;
     }
 
     setSubmitting(true);
@@ -385,11 +401,20 @@ export default function CheckoutPage() {
                     <label className="block text-sm font-medium text-olive/70 mb-1">Postcode *</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={shipping.postcode}
                       onChange={(e) => updateField("postcode", e.target.value)}
-                      className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-olive ${
+                        postcodeCheck.ok
+                          ? "border-olive/20 focus:ring-olive/30"
+                          : "border-red-400 focus:ring-red-200"
+                      }`}
+                      aria-invalid={!postcodeCheck.ok}
                       required
                     />
+                    {!postcodeCheck.ok && (
+                      <p className="text-xs text-red-600 mt-1">{postcodeCheck.error}</p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">

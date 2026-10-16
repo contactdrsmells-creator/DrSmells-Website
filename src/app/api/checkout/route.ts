@@ -9,6 +9,7 @@ import { voucherWindow } from "@/lib/voucher-dates";
 import { variationIsAvailable } from "@/lib/variation-limits";
 import { findZone, quoteShipping, readShippingRates, type ProductShippingRates, type ShippingZone } from "@/lib/shipping";
 import { getCustomerSession } from "@/lib/customer-auth";
+import { checkPostcode } from "@/lib/postcode";
 import { getBalance, getRules, redeemableFor, spendForOrder } from "@/lib/points";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -88,6 +89,14 @@ export async function POST(request: Request) {
 
     if (!["stripe", "doku", "atome"].includes(payment_method)) {
       return Response.json({ error: "Invalid payment method" }, { status: 400 });
+    }
+
+    // A postcode that cannot belong to the country it was sent under. Checked
+    // here as well as on the page, because the page can be bypassed and the
+    // consequence is a real parcel booked on the wrong service.
+    const postcode = checkPostcode(shipping.postcode, shipping.country);
+    if (!postcode.ok) {
+      return Response.json({ error: postcode.error }, { status: 400 });
     }
 
     const supabase = getSupabase();
