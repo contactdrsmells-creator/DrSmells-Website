@@ -54,7 +54,9 @@ const VERDICTS = {
   },
   unknown: {
     label: "Could not check",
-    blurb: "The provider gave no answer, so nothing is claimed about this order either way.",
+    blurb:
+      "This check could not reach the provider for this order. It is not a sign the payment failed — " +
+      "the order's own status is unchanged and still comes from the provider's own confirmation.",
     row: "bg-stone-50 border-stone-200",
     pill: "bg-stone-200 text-stone-600",
   },
@@ -104,6 +106,9 @@ export default function PaymentAuditPage() {
       <p className="text-olive/60 mt-1 mb-6 text-sm">
         Asks Atome and Stripe what really happened to each order, and shows only where they
         disagree with this website. Nothing is changed — anything found is for you to settle.
+        An order it cannot reach the provider about is reported as “could not check”, which is
+        not a sign the payment failed: no order is ever marked paid or unpaid by this page, and
+        none is ever marked paid because a provider stayed silent.
       </p>
 
       <div className="flex flex-wrap items-end gap-3 p-4 border border-olive/15 rounded-xl bg-sage-light/20 mb-6">

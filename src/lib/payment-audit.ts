@@ -102,6 +102,20 @@ async function askStripe(reference: string | null): Promise<ProviderAnswer> {
         amount: pi.amount == null ? null : pi.amount / 100,
       };
     }
+    // A subscription renewal is recorded against the invoice Stripe charged,
+    // which is neither a session nor an intent. Without this every renewal
+    // read as "could not check" — the orders most worth confirming, because
+    // they are created by a webhook with no customer watching.
+    if (ref.startsWith("in_")) {
+      const invoice = await stripe.invoices.retrieve(ref);
+      return {
+        status: invoice.status ?? null,
+        // amount_paid rather than status alone: a partially paid invoice is
+        // not a paid order.
+        paid: invoice.status === "paid" && (invoice.amount_paid ?? 0) > 0,
+        amount: invoice.amount_paid == null ? null : invoice.amount_paid / 100,
+      };
+    }
     return { status: null, paid: false, amount: null, error: `Unrecognised reference "${ref.slice(0, 12)}…"` };
   } catch (err) {
     return { status: null, paid: false, amount: null, error: (err as Error).message };
@@ -169,7 +183,7 @@ function providerHolding(order: { payment_method: string; payment_reference: str
   const ref = String(order.payment_reference || "").trim();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref)) return "doku";
   if (/^MTX\d+/.test(ref)) return "atome";
-  if (ref.startsWith("cs_") || ref.startsWith("pi_")) return "stripe";
+  if (ref.startsWith("cs_") || ref.startsWith("pi_") || ref.startsWith("in_")) return "stripe";
   return order.payment_method;
 }
 
