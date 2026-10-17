@@ -72,10 +72,16 @@ export async function syncOrderToCRM(orderNumber: string) {
     ad_name: order.meta_attribution?.ad_name || undefined,
     ad_id: order.meta_attribution?.ad_id || undefined,
     notes: `Website Order #${orderNumber} | Payment: ${order.payment_method} | Ref: ${order.payment_reference || "N/A"}`,
-    order_items: items.map((i: { product_name: string; variation?: string; quantity: number }) => ({
+    // Each line's own price travels with it. Without it the CRM could say
+    // what left the shelf but not what it was paid for, so every report built
+    // there had to price the lines back up from the catalogue — which ignores
+    // vouchers and read a bundle promotion RM7,000 high.
+    order_items: items.map((i: { product_name: string; variation?: string; quantity: number; unit_price?: number; total_price?: number }) => ({
       product: i.variation ? `${i.product_name} (${i.variation})` : i.product_name,
       name: i.variation ? `${i.product_name} (${i.variation})` : i.product_name,
       quantity: i.quantity || 1,
+      unit_price: Number(i.unit_price) || 0,
+      total_price: Number(i.total_price) || (Number(i.unit_price) || 0) * (i.quantity || 1),
     })),
   };
 
