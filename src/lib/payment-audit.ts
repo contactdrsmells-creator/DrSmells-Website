@@ -127,7 +127,15 @@ async function askDoku(orderNumber: string): Promise<ProviderAnswer> {
     return { status: null, paid: false, amount: null, error: "DOKU is not configured" };
   }
   const r = await getDokuPaymentStatus(orderNumber);
-  return { status: r.status, paid: r.paid, amount: r.amount, error: r.error };
+  // The state is shown alongside the status because a disagreement here is
+  // usually about how far a settled payment has travelled, not about whether
+  // it happened — and reading it beats guessing at it.
+  return {
+    status: r.state && r.state !== r.status ? `${r.status} (${r.state})` : r.status,
+    paid: r.paid,
+    amount: r.amount,
+    error: r.error,
+  };
 }
 
 function verdictFor(order: { payment_status: string; total: number }, answer: ProviderAnswer): {

@@ -28,6 +28,8 @@ export interface DokuPaymentStatus {
   ok: boolean;
   /** Raw transaction.status: SUCCESS, PENDING, FAILED… */
   status: string | null;
+  /** Raw transaction.state, which moves on after payment as money settles. */
+  state: string | null;
   /** True only for a confirmed, completed payment. */
   paid: boolean;
   /** Amount DOKU holds for this invoice, for checking against the order. */
@@ -79,6 +81,7 @@ export async function getDokuPaymentStatus(invoiceNumber: string): Promise<DokuP
       return {
         ok: false,
         status: null,
+      state: null,
         paid: false,
         amount: null,
         transactionId: null,
@@ -97,9 +100,21 @@ export async function getDokuPaymentStatus(invoiceNumber: string): Promise<DokuP
     return {
       ok: true,
       status,
-      // Both conditions, because only a completed payment may mark an order
-      // paid. PAYMENT_DONE was the state on the confirmed card payment.
-      paid: status === "SUCCESS" && (state === null || state === "PAYMENT_DONE"),
+      state,
+      // status is the field that says whether the money arrived; state says
+      // how far along DOKU's own lifecycle it has travelled afterwards.
+      //
+      // This used to require PAYMENT_DONE as well, which was the state read
+      // off the one card payment the contract was established against. A
+      // payment that has since settled carries a later state, so a hundred
+      // genuinely paid orders failed the test and were reported as goods about
+      // to ship unpaid — RM19,636 of parcels to hold back, every one of them
+      // already paid for.
+      //
+      // So SUCCESS decides it, and the state is carried out for reading rather
+      // than used as a gate. A state nobody has seen before should not be able
+      // to turn a completed payment into a withheld parcel.
+      paid: status === "SUCCESS",
       amount: Number.isFinite(amount as number) ? (amount as number) : null,
       transactionId: data?.transaction?.original_request_id ?? null,
       channel: data?.channel?.id ?? data?.service?.id ?? null,
@@ -108,6 +123,7 @@ export async function getDokuPaymentStatus(invoiceNumber: string): Promise<DokuP
     return {
       ok: false,
       status: null,
+      state: null,
       paid: false,
       amount: null,
       transactionId: null,
