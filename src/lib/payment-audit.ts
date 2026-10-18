@@ -32,6 +32,8 @@ export type AuditVerdict =
   | "amount_mismatch"
   /** Both agree. */
   | "ok"
+  /** The provider has no record, and the shop agrees nothing was paid. */
+  | "never_attempted"
   /** The provider could not be asked, so nothing is claimed either way. */
   | "unknown";
 
@@ -145,6 +147,23 @@ function verdictFor(order: { payment_status: string; total: number }, answer: Pr
   const websitePaid = order.payment_status === "paid";
 
   if (answer.error || answer.status == null) {
+    // A provider that has never heard of an order is not a failure to check:
+    // the customer opened a checkout and never paid, so there is nothing at
+    // the gateway to find and both sides already agree. Reported apart from a
+    // genuine failure to reach the provider, because lumping the two together
+    // buried the handful that matter under a hundred abandoned carts.
+    const noRecord = /\b404\b|not found|no record|does not exist/i.test(answer.error || "");
+    if (noRecord && !websitePaid) {
+      return { verdict: "never_attempted", note: "No payment was ever started for this order" };
+    }
+    if (noRecord) {
+      // Marked paid here with nothing at the gateway to show for it. Whatever
+      // the explanation, it is not one to find out at the packing bench.
+      return {
+        verdict: "ghost_paid",
+        note: "Marked paid here, but the provider has no record of this order at all",
+      };
+    }
     return { verdict: "unknown", note: answer.error || "No answer from the provider" };
   }
 
@@ -265,7 +284,7 @@ export async function auditPayments(
     };
   });
 
-  const summary = { ghost_paid: 0, missed_payment: 0, amount_mismatch: 0, ok: 0, unknown: 0 };
+  const summary = { ghost_paid: 0, missed_payment: 0, amount_mismatch: 0, ok: 0, never_attempted: 0, unknown: 0 };
   for (const row of rows) summary[row.verdict]++;
 
   return { rows, checked: rows.length, summary };

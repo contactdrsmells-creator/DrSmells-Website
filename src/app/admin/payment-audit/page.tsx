@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ShieldAlert, ShieldCheck, CircleHelp, Coins, RefreshCw } from "lucide-react";
+import { Loader2, ShieldAlert, ShieldCheck, CircleHelp, CircleSlash, Coins, RefreshCw } from "lucide-react";
 
 /**
  * Reconciling what the shop recorded against what the payment providers say.
@@ -20,11 +20,12 @@ interface Problem {
   provider_amount: number | null;
   created_at: string;
   customer?: string;
-  verdict: "ghost_paid" | "missed_payment" | "amount_mismatch" | "unknown";
+  verdict: "ghost_paid" | "missed_payment" | "amount_mismatch" | "never_attempted" | "unknown";
   note?: string;
 }
 
 interface Result {
+  // Keyed loosely because a new verdict must not break the page.
   checked: number;
   days: number;
   summary: Record<string, number>;
@@ -51,6 +52,14 @@ const VERDICTS = {
     blurb: "Both agree it was paid, but not on how much.",
     row: "bg-orange-50 border-orange-200",
     pill: "bg-orange-100 text-orange-700",
+  },
+  never_attempted: {
+    label: "Never paid",
+    blurb:
+      "The customer opened a checkout and never paid, so the provider has no record of it. " +
+      "Nothing is wrong — both sides agree no money was taken.",
+    row: "bg-stone-50 border-stone-200",
+    pill: "bg-stone-200 text-stone-600",
   },
   unknown: {
     label: "Could not check",
@@ -95,8 +104,8 @@ export default function PaymentAuditPage() {
   const ordered = result
     ? [...result.problems].sort(
         (a, b) =>
-          ["ghost_paid", "missed_payment", "amount_mismatch", "unknown"].indexOf(a.verdict) -
-          ["ghost_paid", "missed_payment", "amount_mismatch", "unknown"].indexOf(b.verdict),
+          ["ghost_paid", "missed_payment", "amount_mismatch", "unknown", "never_attempted"].indexOf(a.verdict) -
+          ["ghost_paid", "missed_payment", "amount_mismatch", "unknown", "never_attempted"].indexOf(b.verdict),
       )
     : [];
 
@@ -157,12 +166,18 @@ export default function PaymentAuditPage() {
 
       {result && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <Stat
               icon={<ShieldCheck className="w-4 h-4" />}
               label="Agree"
-              value={String(result.summary.ok ?? 0)}
+              value={String((result.summary.ok ?? 0) + (result.summary.never_attempted ?? 0))}
               tone="text-green-700 bg-green-50 border-green-200"
+            />
+            <Stat
+              icon={<CircleSlash className="w-4 h-4" />}
+              label="Never paid"
+              value={String(result.summary.never_attempted ?? 0)}
+              tone="text-stone-600 bg-stone-50 border-stone-200"
             />
             <Stat
               icon={<ShieldAlert className="w-4 h-4" />}
