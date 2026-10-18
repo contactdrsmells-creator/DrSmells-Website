@@ -47,5 +47,18 @@ export async function GET(request: Request) {
       remaining: left <= SHOW_COUNT_AT_OR_BELOW ? left : null,
     };
   }
-  return Response.json({ availability: trimmed });
+  // Served from the edge for half a minute, and for a further two while a
+  // fresh copy is fetched behind the request. The shop's own checkout decides
+  // what may actually be sold, so a figure thirty seconds old on a page costs
+  // nothing — and during a rush, where this matters most, it is the difference
+  // between every visitor waiting for the same answer and almost none of them
+  // waiting at all.
+  return Response.json(
+    { availability: trimmed },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+      },
+    },
+  );
 }

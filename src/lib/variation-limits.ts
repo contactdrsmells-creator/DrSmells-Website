@@ -137,21 +137,54 @@ export async function availabilityFor(
   const out: Record<string, VariationAvailability> = {};
 
   const capped = (variations || []).filter((v) => limitOf(v) !== null);
-  // One round trip for all of them, not one each.
-  const chat = await chatSalesFor(capped.map((v) => v.name));
+  if (!capped.length) return out;
+
+  const names = capped.map((v) => v.name);
+
+  // The database and the CRM asked at the same time rather than one after the
+  // other, and the database asked once for every option rather than once each.
+  //
+  // It used to be a containment query per option, which on this product was
+  // five queries plus the CRM call in series — the page took three seconds to
+  // say what was left, and a shopper deciding between packages watched it
+  // happen. One pass over the paid orders answers all five.
+  const [chat, rows] = await Promise.all([
+    chatSalesFor(names),
+    readAll<{ items: unknown }>(
+      (from, to) =>
+        db.from("orders").select("items").eq("payment_status", "paid").range(from, to),
+      { what: "paid orders" },
+    ).catch((err) => {
+      console.error("[Limits] Could not read paid orders:", (err as Error).message);
+      return null;
+    }),
+  ]);
+
+  const wanted = new Set(names);
+  const units = new Map<string, number>();
+  for (const row of rows || []) {
+    const lines = Array.isArray(row.items) ? (row.items as { variation?: string; quantity?: unknown }[]) : [];
+    for (const line of lines) {
+      const name = line?.variation;
+      if (!name || !wanted.has(name)) continue;
+      const quantity = Number(line.quantity);
+      units.set(name, (units.get(name) || 0) + (Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1));
+    }
+  }
 
   for (const variation of capped) {
     const limit = limitOf(variation)!;
 
-    const own = await countPaidForVariation(db, variation.name);
-    const sold = Number.isFinite(own) ? own + (chat[variation.name] || 0) : own;
-    const remaining = Number.isFinite(sold) ? Math.max(0, limit - sold) : 0;
-    out[variation.name] = {
-      limit,
-      sold: Number.isFinite(sold) ? sold : limit,
-      remaining,
-      soldOut: remaining <= 0,
-    };
+    // A failed read must not read as room left, so the option is shown as gone
+    // until the shop can answer for it again.
+    if (!rows) {
+      out[variation.name] = { limit, sold: limit, remaining: 0, soldOut: true };
+      continue;
+    }
+
+    const sold = (units.get(variation.name) || 0) + (chat[variation.name] || 0);
+    const remaining = Math.max(0, limit - sold);
+    out[variation.name] = { limit, sold, remaining, soldOut: remaining <= 0 };
   }
 
   return out;
