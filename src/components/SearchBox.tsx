@@ -12,6 +12,11 @@ import { supabase } from "@/lib/supabase/client";
  * Deliberately the one place hidden products can be found: everything else on
  * the site filters them out, so a product can be sold without being on display.
  * Nothing here filters on `hidden`.
+ *
+ * A retired product is a different matter and is left out. Hidden means "do
+ * not display but still sell"; retired means the shop has stopped selling it,
+ * and offering it in search would send somebody to a page that only tells them
+ * so.
  */
 
 const MIN_QUERY = 2;
@@ -103,11 +108,15 @@ export default function SearchBox() {
         .from("products")
         .select("*")
         .or(`name.ilike.%${query}%,short_description.ilike.%${query}%,category.ilike.%${query}%`)
+        .or("inactive.is.null,inactive.eq.false")
         .order("sort_order")
         .limit(MAX_RESULTS);
 
       if (cancelled) return;
-      setResults((data as Product[]) || []);
+      // Filtered again here, because a row predating the column comes back
+      // with it null and the database filter above is the kind of thing that
+      // quietly stops matching if the column is ever renamed.
+      setResults(((data as Product[]) || []).filter((p) => p.inactive !== true));
       setSearched(true);
       setLoading(false);
     }, DEBOUNCE_MS);

@@ -12,15 +12,25 @@ const isSupabaseConfigured =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 /**
- * Hidden products are left out of every browsable listing. They stay reachable
- * by search and by their own link — the point is to sell them without putting
- * them on display.
+ * Two ways a product can be off the shop, and they mean different things.
  *
- * Written as "not true" rather than "is false" so a row predating the column,
- * where it is null, still shows.
+ * Hidden is unlisted: out of every browsable listing, still reachable by
+ * search and by its own link. The point is to sell it without putting it on
+ * display, which is how the promo products are sold.
+ *
+ * Deactivated is retired: out of the listings, out of search, and its own link
+ * says the item is no longer available. Deleting would do that too, but it
+ * takes the reviews with it and loses the record — this keeps both.
+ *
+ * Written as "not true" rather than "is false" so a row predating either
+ * column, where it is null, still shows.
  */
-const visible = <T extends { hidden?: boolean }>(items: T[]) =>
-  items.filter((p) => p.hidden !== true);
+const visible = <T extends { hidden?: boolean; inactive?: boolean }>(items: T[]) =>
+  items.filter((p) => p.hidden !== true && p.inactive !== true);
+
+/** Retired, whatever else is true of it. */
+export const isRetired = (product: { inactive?: boolean } | null | undefined) =>
+  product?.inactive === true;
 
 export async function getProducts(category?: string): Promise<Product[]> {
   if (!isSupabaseConfigured) {

@@ -131,8 +131,9 @@ export default function ProductPage() {
         const relatedIds = found.related_products || [];
         // A hidden product is not shown here either. Its own page still works —
         // this only stops it being surfaced from somewhere else on the site.
+        // A retired one is not recommended anywhere at all.
         const allProds = ((allProductsRes.data || []) as Product[])
-          .filter((p) => p.hidden !== true && p.slug !== slug);
+          .filter((p) => p.hidden !== true && p.inactive !== true && p.slug !== slug);
         // Only what was chosen. Filling the space with whatever else was in
         // the shop meant a page with nothing selected still recommended four
         // products — which is not a recommendation, and on a campaign page
@@ -149,6 +150,26 @@ export default function ProductPage() {
     setQuantity(1);
     setQuantityText("1");
   }, [slug]);
+
+  // Retired, and somebody followed a link to it. Answered for plainly rather
+  // than 404ing: the link was real once, and whoever saved it is owed an
+  // explanation and a way back into the shop.
+  if (product?.inactive) {
+    return (
+      <div className="bg-white max-w-7xl mx-auto px-4 py-24 text-center">
+        <h1 className="text-2xl font-bold text-olive mb-2">This item is no longer available</h1>
+        <p className="text-olive/60 mb-6">
+          We have stopped selling it. Have a look at what else we make.
+        </p>
+        <Link
+          href="/shop"
+          className="inline-block px-6 py-3 bg-olive text-cream rounded-lg font-semibold hover:bg-sage-dark transition-colors"
+        >
+          Browse the shop
+        </Link>
+      </div>
+    );
+  }
 
   if (notFound) {
     return (

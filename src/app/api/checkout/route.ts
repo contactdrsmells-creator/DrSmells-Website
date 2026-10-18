@@ -112,12 +112,22 @@ export async function POST(request: Request) {
     for (const item of items) {
       const { data: product } = await supabase
         .from("products")
-        .select("price, sale_price, variations, variation_combos, shipping_rates")
+        .select("price, sale_price, variations, variation_combos, shipping_rates, inactive")
         .eq("id", item.product_id)
         .single();
 
       if (!product) {
         return Response.json({ error: `Product not found: ${item.product_name}` }, { status: 400 });
+      }
+
+      // Retired since this basket was filled. The shop stops offering it
+      // everywhere, and a cart held open from before is the one way an order
+      // for it could still arrive.
+      if (product.inactive) {
+        return Response.json(
+          { error: `Sorry, "${item.product_name}" is no longer available. Please remove it from your cart.` },
+          { status: 409 },
+        );
       }
 
       // A limited run that has sold out. Checked here rather than trusted from

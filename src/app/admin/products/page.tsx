@@ -38,7 +38,7 @@ const PROMO_CATEGORY = "promo";
 const emptyProduct: Partial<Product> = {
   name: "", slug: "", description: "", short_description: "", price: 0, sale_price: null,
   category: "underarm", categories: [], related_products: [], image_url: "", images: [], sizes: [], variations: [],
-  in_stock: true, featured: false, hidden: false, show_in_all: true, sort_order: 0, page_sections: {},
+  in_stock: true, featured: false, hidden: false, inactive: false, show_in_all: true, sort_order: 0, page_sections: {},
 };
 
 export default function AdminProducts() {
@@ -255,6 +255,7 @@ export default function AdminProducts() {
       subscription_options: subOptions.length > 0 ? subOptions : null,
       in_stock: editing.in_stock, featured: editing.featured, sort_order: editing.sort_order,
       hidden: !!editing.hidden,
+      inactive: !!editing.inactive,
       reviews_hidden: !!editing.reviews_hidden,
       shipping_rates: editing.shipping_rates && Object.keys(editing.shipping_rates).length > 0
         ? editing.shipping_rates
@@ -500,6 +501,26 @@ export default function AdminProducts() {
                       Kept out of All Products, every category, the home page and related
                       products. Customers can still reach it by searching, or with a direct
                       link — so it stays buyable without being on display.
+                    </span>
+                  </span>
+                </label>
+
+                {/* Deliberately the stronger of the two, and said so, because
+                    the difference is the whole point: hidden still sells. */}
+                <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="accent-olive mt-0.5"
+                    checked={!!editing.inactive}
+                    onChange={(e) => setEditing({ ...editing, inactive: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium text-gray-700">Deactivate — stop selling this</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Out of every listing <em>and</em> out of search, and its link shows
+                      &ldquo;This item is no longer available&rdquo;. Nobody can buy it, even
+                      with it sitting in their cart. Past orders and reviews are kept, so this
+                      is the safe way to retire something instead of deleting it.
                     </span>
                   </span>
                 </label>
@@ -1261,12 +1282,26 @@ export default function AdminProducts() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className={`text-xs px-2 py-1 rounded-full ${product.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                      {product.in_stock ? "In Stock" : "Out of Stock"}
-                    </span>
+                    {!product.inactive && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${product.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {product.in_stock ? "In Stock" : "Out of Stock"}
+                      </span>
+                    )}
+                    {/* First, and the only one shown when it applies: a
+                        retired product is not hidden or in stock in any sense
+                        that matters, and listing those beside it would read as
+                        though it were still for sale. */}
+                    {product.inactive && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full bg-stone-200 text-stone-700"
+                        title="Not sold anywhere — out of every listing and out of search, and its link says the item is no longer available"
+                      >
+                        Deactivated
+                      </span>
+                    )}
                     {/* Otherwise a product missing from the shop looks like a
                         bug rather than a setting. */}
-                    {product.hidden && (
+                    {!product.inactive && product.hidden && (
                       <span
                         className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800"
                         title="Search and direct links only — not in the shop, categories, home page or related products"
@@ -1274,7 +1309,7 @@ export default function AdminProducts() {
                         Hidden
                       </span>
                     )}
-                    {!product.hidden && product.show_in_all === false && (
+                    {!product.inactive && !product.hidden && product.show_in_all === false && (
                       <span
                         className="text-xs px-2 py-1 rounded-full bg-sky-100 text-sky-800"
                         title="Kept out of the All Products list; still shows under its own categories and in Hot Promo"

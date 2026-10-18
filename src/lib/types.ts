@@ -78,6 +78,16 @@ export interface Product {
    * For products that should be buyable but not on display.
    */
   hidden?: boolean;
+  /**
+   * Retired from the shop altogether: out of every listing, out of search, and
+   * its own link says the item is no longer available.
+   *
+   * Stronger than hidden, which stays reachable on purpose. Weaker than
+   * deleting, which takes the product's reviews with it — this keeps them, and
+   * keeps the product itself, so a page that was linked from somewhere answers
+   * for itself instead of 404ing.
+   */
+  inactive?: boolean;
   /** Keeps the review section off this product's page. */
   reviews_hidden?: boolean;
   /**

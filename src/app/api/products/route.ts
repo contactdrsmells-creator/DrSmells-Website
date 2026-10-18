@@ -14,6 +14,11 @@ export async function GET() {
     .from("products")
     .select("id, name, slug, price, sale_price, variations, variation_attributes, variation_combos, in_stock, image_url")
     .eq("in_stock", true)
+    // A retired product is not offered for a new order either. This list feeds
+    // the pickers, and something the shop has stopped selling should not be
+    // choosable from one. Written as "not true" so a row predating the column
+    // still appears.
+    .or("inactive.is.null,inactive.eq.false")
     .order("name");
 
   if (error) {

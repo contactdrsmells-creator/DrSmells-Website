@@ -84,7 +84,7 @@ function ShopContent() {
       // they are meant to be reachable by search and by their own link only.
       // "not true" rather than "is false", so a row predating the column still
       // shows.
-      let items = ((data as Product[]) || []).filter((p) => p.hidden !== true);
+      let items = ((data as Product[]) || []).filter((p) => p.hidden !== true && p.inactive !== true);
       if (activeCategory) {
         items = items.filter((p) => (p.categories || []).includes(activeCategory));
       } else {
