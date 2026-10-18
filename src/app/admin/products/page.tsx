@@ -303,9 +303,27 @@ export default function AdminProducts() {
       .eq("product_id", id);
     reviewCount = count || 0;
 
+    // How many past orders hold this product, said out loud with the
+    // reassurance it needs. An order keeps its own copy of what was bought —
+    // the name, the price, the quantity — so deleting the product leaves every
+    // one of them whole, and 23 orders in this shop already name a product
+    // that no longer exists. Someone about to delete a product with hundreds
+    // of sales behind it should be told that rather than left to guess.
+    const { count: orderCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .filter("items", "cs", JSON.stringify([{ product_id: id }]));
+
+    const ordersLine = orderCount
+      ? `\n\n${orderCount.toLocaleString()} past order${orderCount === 1 ? "" : "s"} contain${orderCount === 1 ? "s" : ""} this product. ` +
+        `${orderCount === 1 ? "It keeps" : "They keep"} the name, price and quantity that were sold, and ${orderCount === 1 ? "is" : "are"} not affected.`
+      : "\n\nNo past orders contain this product.";
+
     const warning = reviewCount
-      ? `Delete this product?\n\nThis will also permanently delete its ${reviewCount.toLocaleString()} review${reviewCount === 1 ? "" : "s"}. They cannot be recovered.\n\nTo take it off the shop and keep the reviews, cancel and tick "Hidden" instead.`
-      : "Delete this product?\n\nPast orders are not affected.";
+      ? `Delete this product?\n\nThis will also permanently delete its ${reviewCount.toLocaleString()} review${reviewCount === 1 ? "" : "s"}. They cannot be recovered.` +
+        ordersLine +
+        `\n\nTo take it off the shop and keep the reviews, cancel and tick "Hidden" instead.`
+      : `Delete this product?${ordersLine}`;
 
     if (!confirm(warning)) return;
     { const { error } = await deleteRecord("products", id); if (error) alert(error.message); }

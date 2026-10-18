@@ -223,6 +223,51 @@ async function inBatches<T, R>(items: T[], size: number, run: (item: T) => Promi
   return out;
 }
 
+/**
+ * One order, whatever its state.
+ *
+ * Returns its verdict even where that verdict is "ok", because somebody asking
+ * about a single order wants the answer either way — "this really was paid" is
+ * the reply that lets a parcel go out.
+ */
+export async function auditOne(
+  db: SupabaseClient,
+  orderNumber: string,
+): Promise<{ rows: AuditRow[] }> {
+  const { data, error } = await db
+    .from("orders")
+    .select("order_number, payment_method, payment_status, payment_reference, total, created_at, shipping")
+    .eq("order_number", orderNumber)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return { rows: [] };
+
+  const holder = providerHolding(data);
+  const answer =
+    holder === "atome"
+      ? await askAtome(data.order_number)
+      : holder === "stripe"
+        ? await askStripe(data.payment_reference)
+        : await askDoku(data.order_number);
+
+  const { verdict, note } = verdictFor(data, answer);
+  return {
+    rows: [{
+      order_number: data.order_number,
+      payment_method: holder,
+      website_status: data.payment_status,
+      provider_status: answer.status,
+      website_total: Number(data.total) || 0,
+      provider_amount: answer.amount,
+      created_at: data.created_at,
+      customer: (data.shipping as { name?: string } | null)?.name,
+      verdict,
+      note,
+    }],
+  };
+}
+
 export interface AuditOptions {
   methods?: string[];
   /** How far back to look. */

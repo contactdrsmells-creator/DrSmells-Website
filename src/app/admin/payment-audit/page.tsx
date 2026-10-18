@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ShieldAlert, ShieldCheck, CircleHelp, CircleSlash, Coins, RefreshCw } from "lucide-react";
+import { Loader2, ShieldAlert, ShieldCheck, CircleHelp, CircleSlash, Coins, RefreshCw, Search } from "lucide-react";
 
 /**
  * Reconciling what the shop recorded against what the payment providers say.
@@ -20,21 +20,28 @@ interface Problem {
   provider_amount: number | null;
   created_at: string;
   customer?: string;
-  verdict: "ghost_paid" | "missed_payment" | "amount_mismatch" | "never_attempted" | "unknown";
+  verdict: string;
   note?: string;
 }
 
 interface Result {
   // Keyed loosely because a new verdict must not break the page.
   checked: number;
-  days: number;
-  summary: Record<string, number>;
+  days?: number;
+  single?: boolean;
+  summary: Record<string, number> | null;
   problems: Problem[];
-  atRisk: number;
-  uncollected: number;
+  atRisk?: number;
+  uncollected?: number;
 }
 
-const VERDICTS = {
+const VERDICTS: Record<string, { label: string; blurb: string; row: string; pill: string }> = {
+  ok: {
+    label: "Paid — confirmed",
+    blurb: "The provider confirms this payment completed for the amount on the order. Safe to ship.",
+    row: "bg-green-50 border-green-200",
+    pill: "bg-green-100 text-green-700",
+  },
   ghost_paid: {
     label: "Do not ship",
     blurb: "Marked paid here, but the provider has no completed payment. Check before posting.",
@@ -69,7 +76,7 @@ const VERDICTS = {
     row: "bg-stone-50 border-stone-200",
     pill: "bg-stone-200 text-stone-600",
   },
-} as const;
+};
 
 const METHOD_OPTIONS = [
   { value: "atome,stripe", label: "Atome + Stripe" },
@@ -79,18 +86,19 @@ const METHOD_OPTIONS = [
 ];
 
 export default function PaymentAuditPage() {
+  const [orderNo, setOrderNo] = useState("");
   const [days, setDays] = useState(30);
   const [methods, setMethods] = useState("atome,stripe");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
 
-  async function run() {
+  async function ask(query: string) {
     setRunning(true);
     setError("");
     setResult(null);
     try {
-      const res = await fetch(`/api/admin/payment-audit?methods=${methods}&days=${days}`);
+      const res = await fetch(`/api/admin/payment-audit?${query}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "The check failed");
       setResult(data);
@@ -100,6 +108,9 @@ export default function PaymentAuditPage() {
       setRunning(false);
     }
   }
+
+  const run = () => ask(`methods=${methods}&days=${days}`);
+  const runOne = () => ask(`order=${encodeURIComponent(orderNo.trim())}`);
 
   const ordered = result
     ? [...result.problems].sort(
@@ -119,6 +130,35 @@ export default function PaymentAuditPage() {
         not a sign the payment failed: no order is ever marked paid or unpaid by this page, and
         none is ever marked paid because a provider stayed silent.
       </p>
+
+      {/* Asked first because it is the use that holds up: one order somebody
+          has a reason to doubt, rather than a sweep of several hundred. */}
+      <form
+        onSubmit={(e) => { e.preventDefault(); runOne(); }}
+        className="flex flex-wrap items-end gap-3 p-4 border border-olive/20 rounded-xl bg-white mb-4"
+      >
+        <div className="flex-1 min-w-[220px]">
+          <label className="block text-xs font-medium text-olive/70 mb-1">Check one order</label>
+          <input
+            value={orderNo}
+            onChange={(e) => setOrderNo(e.target.value)}
+            placeholder="Order number, e.g. 2027WET"
+            className="w-full px-3 py-2 border border-olive/20 rounded-lg text-sm text-olive uppercase placeholder:normal-case placeholder:text-olive/35"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={running || !orderNo.trim()}
+          className="px-5 py-2 bg-olive text-white rounded-lg text-sm font-medium hover:bg-sage disabled:opacity-50 flex items-center gap-2"
+        >
+          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          Check
+        </button>
+        <p className="text-xs text-olive/50 w-full">
+          Use this when a customer says they paid, or before sending an expensive parcel. It asks the
+          gateway about that one order and answers either way.
+        </p>
+      </form>
 
       <div className="flex flex-wrap items-end gap-3 p-4 border border-olive/15 rounded-xl bg-sage-light/20 mb-6">
         <div>
@@ -166,6 +206,7 @@ export default function PaymentAuditPage() {
 
       {result && (
         <>
+          {result.summary && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <Stat
               icon={<ShieldCheck className="w-4 h-4" />}
@@ -198,14 +239,17 @@ export default function PaymentAuditPage() {
               tone="text-stone-600 bg-stone-50 border-stone-200"
             />
           </div>
+          )}
 
           <p className="text-sm text-olive/60 mb-4">
-            Checked {result.checked} orders from the last {result.days} days.
-            {result.atRisk > 0 && (
-              <> <strong className="text-red-700">RM{result.atRisk.toFixed(2)}</strong> of goods are at risk of being shipped unpaid.</>
+            {result.single
+              ? "One order, asked of the provider just now."
+              : `Checked ${result.checked} orders from the last ${result.days} days.`}
+            {(result.atRisk ?? 0) > 0 && (
+              <> <strong className="text-red-700">RM{(result.atRisk ?? 0).toFixed(2)}</strong> of goods are at risk of being shipped unpaid.</>
             )}
-            {result.uncollected > 0 && (
-              <> <strong className="text-amber-700">RM{result.uncollected.toFixed(2)}</strong> was paid but never recorded here.</>
+            {(result.uncollected ?? 0) > 0 && (
+              <> <strong className="text-amber-700">RM{(result.uncollected ?? 0).toFixed(2)}</strong> was paid but never recorded here.</>
             )}
           </p>
 
