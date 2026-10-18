@@ -298,7 +298,13 @@ export default function ProductPage() {
         : !comboInStock
           ? "Out of Stock"
           : null)
-    : (product.in_stock ? null : "Out of Stock");
+    // A limited option that has run out, as well as the product itself being
+    // off. The option's own button is already disabled, but that was the only
+    // guard: availability is read once when the page opens, so a package that
+    // sold out while somebody sat on it stayed addable to their cart.
+    : availability[selectedSize]?.soldOut
+      ? "Sold Out"
+      : (product.in_stock ? null : "Out of Stock");
   const buyDisabled = unavailableLabel !== null;
 
   /** Keeps the number and the text in the box in step, within bounds. */
