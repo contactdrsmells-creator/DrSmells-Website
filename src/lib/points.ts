@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readAll } from "@/lib/paged";
 
 /**
  * Points, kept as a ledger rather than a running total.
@@ -94,6 +95,45 @@ export function lifetimeEarnedFrom(rows: LedgerRow[]): number {
 
 export async function getBalance(db: SupabaseClient, customerId: string): Promise<number> {
   return balanceFrom(await getLedger(db, customerId));
+}
+
+/**
+ * Every customer's balance, in one read of the ledger.
+ *
+ * The admin screen asked for five hundred balances by calling getBalance five
+ * hundred times, each its own round trip. It took seconds when the shop was
+ * small and stopped finishing at all as the ledger grew — the page sat on its
+ * spinner for ever, because a failed load there returns quietly and leaves it
+ * spinning.
+ *
+ * One pass, summed in memory. A customer with no rows is absent from the
+ * ledger rather than zero in it, so the caller treats a missing id as nought.
+ */
+export async function getBalances(
+  db: SupabaseClient,
+  customerIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!customerIds.length) return out;
+
+  const rows = await readAll<LedgerRow & { customer_id: string }>(
+    (from, to) =>
+      db
+        .from("points_ledger")
+        .select("customer_id, delta, reason, expires_at")
+        .in("customer_id", customerIds)
+        .range(from, to),
+    { what: "points ledger" },
+  );
+
+  const byCustomer = new Map<string, LedgerRow[]>();
+  for (const row of rows) {
+    const list = byCustomer.get(row.customer_id);
+    if (list) list.push(row);
+    else byCustomer.set(row.customer_id, [row]);
+  }
+  for (const [id, list] of byCustomer) out.set(id, balanceFrom(list));
+  return out;
 }
 
 export async function getHistory(db: SupabaseClient, customerId: string, limit = 50) {

@@ -1,6 +1,6 @@
 import { requirePermission } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/customer-auth";
-import { DEFAULT_RULES, getBalance, getRules } from "@/lib/points";
+import { DEFAULT_RULES, getBalance, getBalances, getRules } from "@/lib/points";
 
 /** The rules, plus every customer with their balance, for the admin screen. */
 export async function GET() {
@@ -16,10 +16,13 @@ export async function GET() {
     .order("created_at", { ascending: false })
     .limit(500);
 
-  const withBalances = [];
-  for (const c of customers || []) {
-    withBalances.push({ ...c, balance: await getBalance(db, c.id) });
-  }
+  // One read of the ledger for all of them. This used to ask per customer, in
+  // series, which was five hundred round trips and eventually never finished.
+  const balances = await getBalances(db, (customers || []).map((c) => c.id));
+  const withBalances = (customers || []).map((c) => ({
+    ...c,
+    balance: balances.get(c.id) ?? 0,
+  }));
 
   return Response.json({ rules, customers: withBalances });
 }
