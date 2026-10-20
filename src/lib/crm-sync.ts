@@ -52,6 +52,10 @@ export async function syncOrderToCRM(orderNumber: string) {
     // Points spent are a discount by another name — both come off the total,
     // and an export that showed only one would not add up.
     discount: (order.discount || 0) + (order.points_discount || 0),
+    // And which voucher it was. The amount alone says a discount happened and
+    // not why: without the code there is no way to tell what a campaign cost,
+    // or that two orders were discounted for quite different reasons.
+    voucher_code: order.voucher_code || null,
     address: shipping.address_line1 || "",
     address2: shipping.address_line2 || "",
     city: shipping.city || "",
