@@ -221,6 +221,18 @@ export async function awardForOrders(
 
   const { error } = await db.from("points_ledger").insert(rows);
   if (error) {
+    // The check above reads before it writes, so two requests arriving
+    // together — a gateway's webhook and the payment checker, or one webhook
+    // retried — both saw an unpaid order and both awarded it. Order 2047WNS
+    // was credited 452 points twice in the same minute, and 2047WYT 322.
+    //
+    // A unique index on the order number now refuses the second write, and
+    // this is where that refusal lands. It means the points were already
+    // awarded, which is the outcome wanted, so it is not an error to report.
+    if (error.code === "23505") {
+      console.warn("[Points] Award already recorded for these orders, ignoring the duplicate");
+      return { awarded: 0, orders: 0 };
+    }
     console.error("[Points] Could not award a batch:", error.message);
     return { awarded: 0, orders: 0 };
   }
@@ -278,6 +290,60 @@ export async function spendForOrder(
 }
 
 /** Puts points back when an order they paid for is cancelled or refunded. */
+/** Statuses that mean the sale did not stand. */
+export const CANCELLED = new Set(["cancelled", "refunded", "returned", "failed"]);
+
+/**
+ * Takes back the points awarded for orders that did not stand.
+ *
+ * refundForOrder was written and never called, so a cancelled order kept its
+ * points for ever: somebody could order, be credited, cancel, and spend those
+ * points on the next thing.
+ *
+ * Reversed rather than deleted, so the customer's history still explains where
+ * the points went, and guarded so running twice does not take them twice.
+ * Returns whether anything changed, which saves the caller a second read.
+ */
+export async function reverseForCancelled(
+  db: SupabaseClient,
+  orderNumbers: string[],
+): Promise<boolean> {
+  if (!orderNumbers.length) return false;
+
+  const { data: rows } = await db
+    .from("points_ledger")
+    .select("id, customer_id, delta, reason, order_number")
+    .in("order_number", orderNumbers);
+
+  if (!rows?.length) return false;
+
+  // What has already been taken back, so a second run is a no-op.
+  const undone = new Set(
+    rows.filter((r) => r.reason === "reversed").map((r) => `${r.order_number}|${-r.delta}`),
+  );
+
+  const toInsert = rows
+    .filter((r) => r.reason === "order" && r.delta > 0 && !undone.has(`${r.order_number}|${r.delta}`))
+    .map((r) => ({
+      customer_id: r.customer_id,
+      delta: -r.delta,
+      reason: "reversed",
+      order_number: r.order_number,
+    }));
+
+  if (!toInsert.length) return false;
+
+  const { error } = await db.from("points_ledger").insert(toInsert);
+  if (error) {
+    console.error("[Points] Could not reverse awards for cancelled orders:", error.message);
+    return false;
+  }
+  console.warn(
+    `[Points] Reversed ${toInsert.length} award(s) for cancelled orders: ${[...new Set(toInsert.map((r) => r.order_number))].join(", ")}`,
+  );
+  return true;
+}
+
 export async function refundForOrder(db: SupabaseClient, orderNumber: string) {
   const { data: rows } = await db
     .from("points_ledger")
@@ -344,6 +410,25 @@ export async function awardForOtherChannels(
     console.error("[Points] CRM unreachable:", (err as Error).message);
     return { awarded: 0, orders: 0 };
   }
+
+  // Chat orders awarded earlier that the CRM no longer lists as live. The feed
+  // leaves out anything cancelled, refunded or returned, so an order that was
+  // paid for once and is absent now is one that did not stand — and its points
+  // would otherwise sit in the balance for ever.
+  const live = new Set(orders.map((o) => o.order_id));
+  const { data: awardedRows } = await db
+    .from("points_ledger")
+    .select("order_number")
+    .eq("customer_id", customerId)
+    .eq("reason", "order")
+    .gt("delta", 0);
+
+  const goneQuiet = (awardedRows || [])
+    .map((r) => r.order_number as string)
+    // Only the CRM's own ids: a website order is not in this feed by design.
+    .filter((n) => n?.startsWith("ORD-") && !live.has(n));
+
+  if (goneQuiet.length) await reverseForCancelled(db, goneQuiet);
 
   return awardForOrders(db, {
     customerId,

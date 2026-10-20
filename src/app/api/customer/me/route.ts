@@ -1,6 +1,7 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import {
-  awardForOrders, balanceFrom, getHistory, getLedger, getRules, lifetimeEarnedFrom,
+  awardForOrders, balanceFrom, CANCELLED, getHistory, getLedger, getRules, lifetimeEarnedFrom,
+  reverseForCancelled,
 } from "@/lib/points";
 import { getTiers, standingFor, multiplierFor } from "@/lib/tiers";
 
@@ -50,9 +51,24 @@ export async function GET() {
       .map((order) => ({ orderNumber: order.order_number, spend: Number(order.total || 0) })),
   });
 
+  // And points taken back for an order that has since been cancelled or
+  // refunded. The reversal was written long ago and nothing ever called it, so
+  // a cancelled order kept its points for ever — somebody could order, be
+  // credited, cancel, and spend the points on the next thing.
+  //
+  // Checked here, beside the award, because the two have to agree: points
+  // appear when the customer opens their account, and they can only spend them
+  // while signed in, so this runs before any redemption can.
+  const reversed = await reverseForCancelled(
+    db,
+    (orders || [])
+      .filter((order) => CANCELLED.has(String(order.payment_status)) || CANCELLED.has(String(order.status)))
+      .map((order) => order.order_number),
+  );
+
   // Re-read only when the sweep actually changed something, which it almost
   // never does — the common case is one query, not two.
-  const rows = award.awarded ? await getLedger(db, session.id) : ledger;
+  const rows = award.awarded || reversed ? await getLedger(db, session.id) : ledger;
   const balance = balanceFrom(rows);
   const standing = standingFor(lifetimeEarnedFrom(rows), tiers);
 
