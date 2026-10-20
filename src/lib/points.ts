@@ -394,6 +394,7 @@ export async function awardForOtherChannels(
   const endpoint = url.replace(/\/[^/]*$/, "/customer-orders");
 
   let orders: { order_id: string; amount: number }[] = [];
+  let cancelled: { order_id: string }[] = [];
   try {
     const res = await fetch(
       `${endpoint}?phone=${encodeURIComponent(phone)}&since=${encodeURIComponent(since)}`,
@@ -403,7 +404,9 @@ export async function awardForOtherChannels(
       console.error("[Points] Could not read the CRM's orders:", res.status);
       return { awarded: 0, orders: 0 };
     }
-    orders = (await res.json())?.orders || [];
+    const body = await res.json();
+    orders = body?.orders || [];
+    cancelled = body?.cancelled || [];
   } catch (err) {
     // The account page must still open when the CRM cannot be reached; the
     // points are simply picked up the next time it does.
@@ -411,24 +414,16 @@ export async function awardForOtherChannels(
     return { awarded: 0, orders: 0 };
   }
 
-  // Chat orders awarded earlier that the CRM no longer lists as live. The feed
-  // leaves out anything cancelled, refunded or returned, so an order that was
-  // paid for once and is absent now is one that did not stand — and its points
-  // would otherwise sit in the balance for ever.
-  const live = new Set(orders.map((o) => o.order_id));
-  const { data: awardedRows } = await db
-    .from("points_ledger")
-    .select("order_number")
-    .eq("customer_id", customerId)
-    .eq("reason", "order")
-    .gt("delta", 0);
-
-  const goneQuiet = (awardedRows || [])
-    .map((r) => r.order_number as string)
-    // Only the CRM's own ids: a website order is not in this feed by design.
-    .filter((n) => n?.startsWith("ORD-") && !live.has(n));
-
-  if (goneQuiet.length) await reverseForCancelled(db, goneQuiet);
+  // Orders the CRM says did not stand, named by it rather than inferred from
+  // being absent — absence is ambiguous, since an order can also be missing
+  // because it was placed under a different number.
+  //
+  // This covers website orders too. Staff cancel in the CRM, the website never
+  // heard, and five of its paid orders were cancelled there with nothing said;
+  // one of them belonged to a member. Whoever cancels an order is the
+  // authority on it, whichever system they were sitting in.
+  const dead = cancelled.map((o) => o.order_id).filter(Boolean);
+  if (dead.length) await reverseForCancelled(db, dead);
 
   return awardForOrders(db, {
     customerId,

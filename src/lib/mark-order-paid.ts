@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { reportPurchaseToMeta } from "@/lib/meta-capi";
+import { awardForOrders, getLedger, lifetimeEarnedFrom } from "@/lib/points";
+import { getTiers, multiplierFor } from "@/lib/tiers";
 
 /**
  * Marks an order paid, and never lets an optional field take the core fields
@@ -58,4 +60,44 @@ export async function markOrderPaid(
   await reportPurchaseToMeta(supabase, orderNumber).catch((err: Error) =>
     console.error(`[MetaCAPI] Unexpected error reporting ${orderNumber}:`, err.message),
   );
+
+  // And the points, here for the same reason as the reporting above: this is
+  // the one road every payment takes.
+  //
+  // They used to be awarded only when the customer opened their account, so a
+  // member who ordered and did not sign in again had earned nothing they could
+  // see — fifteen paid orders were sitting uncredited. The sweep on the
+  // account page stays as a backstop for anything this misses, and cannot
+  // double-award now that the ledger refuses a second row per order.
+  await awardOnPayment(supabase, orderNumber).catch((err: Error) =>
+    console.error(`[Points] Unexpected error awarding ${orderNumber}:`, err.message),
+  );
+}
+
+/**
+ * Points for an order that has just been paid for.
+ *
+ * Only for an order placed while signed in: points belong to an account, and
+ * one bought as a guest has nobody to credit. A guest who signs up later is
+ * picked up by the account page's sweep, which matches on the phone number.
+ */
+async function awardOnPayment(supabase: SupabaseClient, orderNumber: string): Promise<void> {
+  const { data: order } = await supabase
+    .from("orders")
+    .select("customer_id, total")
+    .eq("order_number", orderNumber)
+    .maybeSingle();
+
+  if (!order?.customer_id) return;
+
+  const [ledger, tiers] = await Promise.all([
+    getLedger(supabase, order.customer_id),
+    getTiers(supabase),
+  ]);
+
+  await awardForOrders(supabase, {
+    customerId: order.customer_id,
+    multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
+    orders: [{ orderNumber, spend: Number(order.total || 0) }],
+  });
 }
