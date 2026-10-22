@@ -142,6 +142,18 @@ export async function loadAutomationConfig(): Promise<WhatsAppAutomationConfig> 
  * The order knows which country it ships to, so that decides the code rather
  * than the digits alone. Where the country is not given, Malaysia is still
  * assumed — that is what it almost always is.
+ *
+ * Except that the country is about the parcel and the number is about the
+ * person, and the two part company constantly in Johor: a Singaporean living
+ * across the causeway ships to Johor Jaya and gives their Singapore mobile.
+ * Fourteen such orders were reminded at "606596482117" and the like, numbers
+ * that exist nowhere, and WhatsApp answered "Message Undeliverable" — RM3,696
+ * of carts messaged into the void.
+ *
+ * So a number carrying its own country code is believed over the parcel's
+ * destination. "65" followed by eight digits beginning 8 or 9 is a Singapore
+ * mobile whatever the shipping address says, and no Malaysian number can look
+ * like that: Malaysian mobiles begin 01, and nothing there begins 65.
  */
 
 /** Dialling code and local length for the countries the shop sells to. */
@@ -156,6 +168,11 @@ export function normalisePhone(
 ): string | null {
   const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return null;
+
+  // A number that names its own country wins over the parcel's destination.
+  // Checked before anything else, because the Malaysian branch below would
+  // otherwise read the 65 as part of a local number and prefix 60 to it.
+  if (/^65[89]\d{7}$/.test(digits)) return digits;
 
   const where = /singapore|^sg$/i.test(String(country ?? "").trim())
     ? DIALLING.singapore
