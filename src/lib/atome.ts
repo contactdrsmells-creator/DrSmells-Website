@@ -41,8 +41,8 @@ export interface AtomeCheckoutResult {
   referenceId: string;
 }
 
-/** Atome's floor. Below this the option should not even be offered. */
-export const ATOME_MIN_TOTAL_MYR = 10;
+/** Atome's floor. Kept with every gateway's, so the checkout page can show it. */
+export { ATOME_MIN_TOTAL_MYR } from "@/lib/payment-minimums";
 
 const API_URL = () => process.env.ATOME_API_URL || "https://api.apaylater.com/v2";
 

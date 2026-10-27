@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { createDokuCheckout, isDokuConfigured } from "@/lib/doku";
-import { createAtomePayment, isAtomeConfigured, ATOME_MIN_TOTAL_MYR } from "@/lib/atome";
+import { createDokuCheckout, isDokuConfigured, DokuCheckoutError } from "@/lib/doku";
+import { createAtomePayment, isAtomeConfigured } from "@/lib/atome";
+import { checkMinimum } from "@/lib/payment-minimums";
 import { resolveUnitPrice, resolveSubscriptionPrice, hasUnmatchedCombo } from "@/lib/pricing";
 import { normalisePhoneForStorage } from "@/lib/phone";
 import { generateOrderNumber } from "@/lib/order-number";
@@ -262,6 +263,15 @@ export async function POST(request: Request) {
 
     if (Math.abs(serverTotal - total) > 1) {
       return Response.json({ error: "Price mismatch. Please refresh and try again." }, { status: 400 });
+    }
+
+    // Every gateway has a floor, and an order below it is refused at the far
+    // end however well-formed it is. Checked before the row is written, so a
+    // basket that cannot be paid for never becomes an order sitting pending
+    // with no payment link.
+    const belowMinimum = checkMinimum(payment_method, serverTotal);
+    if (belowMinimum) {
+      return Response.json({ error: belowMinimum }, { status: 400 });
     }
 
     // Create order
@@ -529,11 +539,8 @@ export async function POST(request: Request) {
       if (!isAtomeConfigured()) {
         return Response.json({ error: "Atome not configured" }, { status: 500 });
       }
-      // Atome refuses anything under RM10; better said here than as a
-      // gateway error after the order row already exists.
-      if (serverTotal < ATOME_MIN_TOTAL_MYR) {
-        return Response.json({ error: `Atome requires a minimum of RM${ATOME_MIN_TOTAL_MYR}` }, { status: 400 });
-      }
+      // Atome's own RM10 floor is checked with the others, before the order
+      // exists.
 
       const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -580,11 +587,33 @@ export async function POST(request: Request) {
           .from("orders")
           .update({ payment_reference: checkout.checkoutId, payment_url: redirect_url || null })
           .eq("id", order.id);
-      } catch {
-        // The order exists; only the gateway's checkout could not be made. An
-        // error here threw away a filled-in address and a chosen cart over
-        // something that usually works on the next attempt — during a flash
-        // sale that was one customer in five, each of them simply gone.
+      } catch (err) {
+        // A refusal DOKU will repeat is not worth retrying, and retrying it
+        // was the worse half of this: /pay asks again, is refused again, and
+        // redirects to the confirmation page — which tells the customer their
+        // order was received and payment is awaited. Nothing on that page says
+        // anything went wrong, so the shopper leaves believing they have
+        // bought something and the order sits pending for good.
+        //
+        // Say so instead, and mark the order for what it is. The cart is only
+        // cleared on success, so the customer still has their basket.
+        if (err instanceof DokuCheckoutError && err.permanent) {
+          console.error(`DOKU refused ${orderNumber} (RM${serverTotal}):`, err.detail);
+          await supabase
+            .from("orders")
+            .update({ payment_status: "failed" })
+            .eq("id", order.id);
+
+          return Response.json(
+            { error: "The payment gateway could not take this order. Please try another payment method or contact us." },
+            { status: 400 },
+          );
+        }
+
+        // Otherwise the order exists and only the gateway's checkout could not
+        // be made. An error here threw away a filled-in address and a chosen
+        // cart over something that usually works on the next attempt — during
+        // a flash sale that was one customer in five, each of them simply gone.
         //
         // /pay mints a fresh checkout of its own, so sending them there is a
         // second attempt that costs them a page load rather than the sale.

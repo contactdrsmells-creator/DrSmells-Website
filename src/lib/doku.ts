@@ -48,6 +48,27 @@ export interface DokuCheckoutResult {
   checkoutId: string;
 }
 
+/**
+ * A failed attempt to create a checkout, and whether asking again could help.
+ *
+ * The two cases need opposite handling and look identical from outside: a
+ * gateway that is merely busy should be retried, while an order DOKU will
+ * never accept must be reported to the customer instead of being shuffled
+ * through a second attempt that lands them on a page with no way to pay.
+ */
+export class DokuCheckoutError extends Error {
+  constructor(
+    message: string,
+    /** True when DOKU refused this order itself, so a retry would be refused too. */
+    readonly permanent: boolean,
+    /** DOKU's own words, for the server log. */
+    readonly detail = "",
+  ) {
+    super(message);
+    this.name = "DokuCheckoutError";
+  }
+}
+
 export function isDokuConfigured(): boolean {
   return !!(process.env.DOKU_CLIENT_ID && process.env.DOKU_SECRET_KEY && process.env.DOKU_API_KEY);
 }
@@ -270,7 +291,11 @@ export async function createDokuCheckout(input: DokuCheckoutInput): Promise<Doku
   }
 
   if (!res || !res.ok) {
-    throw new Error("Failed to create DOKU checkout");
+    // A 4xx is DOKU's verdict on this order — the amount, a line item, the
+    // customer's details — and it will say the same thing every time. Anything
+    // else is the gateway's own trouble, or no answer at all.
+    const permanent = !!res && res.status >= 400 && res.status < 500 && res.status !== 429;
+    throw new DokuCheckoutError("Failed to create DOKU checkout", permanent, lastError);
   }
 
   const data = await res.json();

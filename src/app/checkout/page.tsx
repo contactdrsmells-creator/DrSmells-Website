@@ -11,6 +11,7 @@ import { trackInitiateCheckout } from "@/components/MetaPixel";
 import { getOrderSource, getMetaTrackingData, readAttribution } from "@/lib/attribution";
 import { findZone, quoteShipping, type ShippingZone } from "@/lib/shipping";
 import { checkPostcode } from "@/lib/postcode";
+import { minimumFor } from "@/lib/payment-minimums";
 
 const MALAYSIAN_STATES = [
   "Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka",
@@ -44,6 +45,62 @@ interface VoucherResult {
   min_order_amount: number;
   free_shipping?: boolean;
   error?: string;
+}
+
+type PaymentMethod = "doku" | "stripe" | "atome";
+
+/**
+ * One payment choice, greyed out when the basket is below what that gateway
+ * will take.
+ *
+ * Atome's RM10 floor was already shown this way; the others were not, so a
+ * basket under RM2 offered DOKU and Stripe as though they would work. They
+ * refuse the checkout, and the shopper found that out only after handing over
+ * their address — on a page that told them the order had been received.
+ *
+ * The note says the amount, because that is something the shopper can act on.
+ */
+function PaymentOption({
+  value,
+  title,
+  detail,
+  total,
+  selected,
+  onSelect,
+}: {
+  value: PaymentMethod;
+  title: string;
+  detail: string;
+  total: number;
+  selected: PaymentMethod;
+  onSelect: (method: PaymentMethod) => void;
+}) {
+  const minimum = minimumFor(value);
+  const tooSmall = total < minimum;
+
+  return (
+    <label
+      className={`flex items-center gap-3 p-4 border border-olive/20 rounded-lg transition-colors ${
+        tooSmall ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-olive/40"
+      }`}
+    >
+      <input
+        type="radio"
+        name="payment"
+        value={value}
+        checked={selected === value}
+        onChange={() => onSelect(value)}
+        disabled={tooSmall}
+        className="accent-olive"
+      />
+      <div>
+        <p className="font-medium text-olive">{title}</p>
+        <p className="text-xs text-olive/50">
+          {tooSmall ? `Minimum order RM${minimum.toFixed(2)}` : detail}
+        </p>
+      </div>
+    </label>
+  );
 }
 
 export default function CheckoutPage() {
@@ -319,6 +376,11 @@ export default function CheckoutPage() {
   const hasSubscription = items.some((item) => item.subscription);
   const noPaymentEnabled = !!paymentSettings && !paymentSettings.doku_enabled && !paymentSettings.stripe_enabled && !paymentSettings.atome_enabled && !hasSubscription;
 
+  // A basket the chosen gateway will not take. Stopping here is the whole
+  // point: the alternative is an order in the database that can never be paid.
+  const selectedMinimum = minimumFor(hasSubscription ? "stripe" : paymentMethod);
+  const belowMinimum = !noPaymentEnabled && orderTotal < selectedMinimum;
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -489,57 +551,34 @@ export default function CheckoutPage() {
                   <h2 className="text-lg font-semibold text-olive mb-4">Payment Method</h2>
                   <div className="space-y-3">
                     {paymentSettings?.doku_enabled && (
-                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="doku"
-                          checked={paymentMethod === "doku"}
-                          onChange={() => setPaymentMethod("doku")}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">DOKU (recommended)</p>
-                          <p className="text-xs text-olive/50">FPX, E-Wallet, BNPL, Credit/Debit Card (Malaysia)</p>
-                        </div>
-                      </label>
+                      <PaymentOption
+                        value="doku"
+                        title="DOKU (recommended)"
+                        detail="FPX, E-Wallet, BNPL, Credit/Debit Card (Malaysia)"
+                        total={orderTotal}
+                        selected={paymentMethod}
+                        onSelect={setPaymentMethod}
+                      />
                     )}
                     {paymentSettings?.atome_enabled && (
-                      <label className={`flex items-center gap-3 p-4 border border-olive/20 rounded-lg transition-colors ${orderTotal < 10 ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-olive/40"}`}>
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="atome"
-                          checked={paymentMethod === "atome"}
-                          onChange={() => setPaymentMethod("atome")}
-                          disabled={orderTotal < 10}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">Atome</p>
-                          <p className="text-xs text-olive/50">
-                            {orderTotal < 10
-                              ? "Buy Now Pay Later — minimum order RM10"
-                              : "Buy Now Pay Later — split into 3 interest-free payments"}
-                          </p>
-                        </div>
-                      </label>
+                      <PaymentOption
+                        value="atome"
+                        title="Atome"
+                        detail="Buy Now Pay Later — split into 3 interest-free payments"
+                        total={orderTotal}
+                        selected={paymentMethod}
+                        onSelect={setPaymentMethod}
+                      />
                     )}
                     {paymentSettings?.stripe_enabled && (
-                      <label className="flex items-center gap-3 p-4 border border-olive/20 rounded-lg cursor-pointer hover:border-olive/40 transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="stripe"
-                          checked={paymentMethod === "stripe"}
-                          onChange={() => setPaymentMethod("stripe")}
-                          className="accent-olive"
-                        />
-                        <div>
-                          <p className="font-medium text-olive">Stripe</p>
-                          <p className="text-xs text-olive/50">Visa, Mastercard — secured by Stripe</p>
-                        </div>
-                      </label>
+                      <PaymentOption
+                        value="stripe"
+                        title="Stripe"
+                        detail="Visa, Mastercard — secured by Stripe"
+                        total={orderTotal}
+                        selected={paymentMethod}
+                        onSelect={setPaymentMethod}
+                      />
                     )}
                   </div>
                 </div>
@@ -686,7 +725,7 @@ export default function CheckoutPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting || noPaymentEnabled}
+                  disabled={submitting || noPaymentEnabled || belowMinimum}
                   className="w-full mt-6 py-3 bg-olive text-cream font-semibold rounded-lg hover:bg-sage-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {submitting ? (
@@ -696,6 +735,8 @@ export default function CheckoutPage() {
                     </>
                   ) : noPaymentEnabled ? (
                     "Payment not configured"
+                  ) : belowMinimum ? (
+                    `Minimum order RM ${selectedMinimum.toFixed(2)}`
                   ) : (
                     `Pay RM ${orderTotal.toFixed(2)}`
                   )}
@@ -704,6 +745,13 @@ export default function CheckoutPage() {
                 {noPaymentEnabled && (
                   <p className="text-xs text-red-500 text-center mt-2">
                     Payment gateways not enabled. Please contact the store owner.
+                  </p>
+                )}
+
+                {belowMinimum && (
+                  <p className="text-xs text-red-500 text-center mt-2">
+                    Orders under RM{selectedMinimum.toFixed(2)} cannot be processed by this
+                    payment method. Please add another item to your cart.
                   </p>
                 )}
               </div>
