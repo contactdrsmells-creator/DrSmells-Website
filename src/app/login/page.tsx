@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 /**
  * Signing in with the mobile number orders are placed under.
@@ -22,6 +22,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /**
+   * A temporary password from the shop is ten random characters in both cases,
+   * and typing it blind on a phone is most of why "the new password does not
+   * work" — five quiet mistakes and the account locks itself.
+   */
+  const [showPassword, setShowPassword] = useState(false);
 
   /** Asks for a code, then checks it. Two steps, one screen. */
   async function submitCode(e: React.FormEvent) {
@@ -124,15 +130,28 @@ export default function LoginPage() {
           {mode !== "code" && (
             <div>
               <label className="block text-xs font-medium text-olive/70 mb-1">Password</label>
-              <input
-                type="password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2.5 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-2.5 pr-11 border border-olive/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 text-olive"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((on) => !on)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-olive/40 hover:text-olive/70"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           )}
 

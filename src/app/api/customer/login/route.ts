@@ -38,15 +38,34 @@ export async function POST(request: Request) {
 
   if (!customer || !customer.password_hash) return wrong();
 
-  if (customer.locked_until && new Date(customer.locked_until) > new Date()) {
+  const lockedUntil = customer.locked_until ? new Date(customer.locked_until) : null;
+
+  if (lockedUntil && lockedUntil > new Date()) {
+    // Say how long. "A few minutes" leaves someone refreshing every thirty
+    // seconds, and the person who most needs this message is the one who has
+    // just been given a new password and believes it does not work.
+    const minutes = Math.max(1, Math.ceil((lockedUntil.getTime() - Date.now()) / 60_000));
     return Response.json(
-      { error: "Too many attempts. Please try again in a few minutes." },
+      { error: `Too many wrong attempts. Please try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` },
       { status: 429 },
     );
   }
 
   if (!verifyPassword(password, customer.password_hash)) {
-    const attempts = Number(customer.login_attempts || 0) + 1;
+    /**
+     * A served lockout clears the count.
+     *
+     * It did not, so login_attempts stayed at 5 for good once an account had
+     * been locked — and the next single typo, days or weeks later, put it
+     * straight back to 5 and locked it for another quarter of an hour. One
+     * customer sat at five attempts for nineteen days that way.
+     *
+     * Someone who has waited out the lock has done what was asked of them and
+     * gets the full five tries again. Typing a ten-character temporary
+     * password on a phone takes more than one go.
+     */
+    const served = lockedUntil !== null;
+    const attempts = (served ? 0 : Number(customer.login_attempts || 0)) + 1;
     await db.from("customers").update({
       login_attempts: attempts,
       locked_until: attempts >= MAX_ATTEMPTS
