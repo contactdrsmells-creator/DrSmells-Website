@@ -19,7 +19,6 @@ export default function VideoHero({ banner }: { banner?: Banner }) {
       <AutoVideo
         src={banner?.video_url || "/videos/hero.mp4"}
         poster={banner?.image_url || undefined}
-        eager
         className="absolute inset-0 w-full h-full object-cover"
       />
 

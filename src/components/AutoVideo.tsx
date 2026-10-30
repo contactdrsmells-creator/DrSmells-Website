@@ -30,13 +30,10 @@ export default function AutoVideo({
   src,
   className,
   poster,
-  eager,
 }: {
   src: string;
   className?: string;
   poster?: string;
-  /** Fetch the whole video immediately — for a video the page opens on. */
-  eager?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [needsTap, setNeedsTap] = useState(false);
@@ -106,38 +103,6 @@ export default function AutoVideo({
     const onVisible = () => { if (document.visibilityState === "visible") tryPlay(); };
     document.addEventListener("visibilitychange", onVisible);
 
-    /**
-     * Start fetching about a screen before the video is reached.
-     *
-     * Waiting until it was actually on screen meant the download only began
-     * once the viewer was already looking at the space where it should be —
-     * so on a phone the section arrived as a tall blank gap that filled in
-     * seconds later, which is exactly how long the file took to arrive.
-     *
-     * A screen's warning is enough for these: they are a few hundred
-     * kilobytes, and scrolling that last screen takes longer than fetching
-     * them. Nothing is fetched for a video the viewer never scrolls near.
-     */
-    const preloader = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        if (el.preload !== "auto") {
-          el.preload = "auto";
-          // preload is read when the element loads its source, so the change
-          // means nothing on its own once that has happened.
-          //
-          // But load() starts the element over from nothing, so it must not
-          // reach a video that is already running: both observers can fire in
-          // the same tick when the page opens near the video, and resetting a
-          // video that had just begun would stop it dead.
-          if (el.paused && !el.currentTime) el.load();
-        }
-        preloader.disconnect();
-      },
-      { rootMargin: "800px 0px" },
-    );
-    preloader.observe(el);
-
     const observer = new IntersectionObserver(
       (entries) =>
         entries.forEach((entry) => {
@@ -174,7 +139,6 @@ export default function AutoVideo({
 
     return () => {
       observer.disconnect();
-      preloader.disconnect();
       clearInterval(keepPlaying);
       clearTimeout(giveUpTimer);
       gestures.forEach((type) => document.removeEventListener(type, onGesture));
@@ -183,20 +147,49 @@ export default function AutoVideo({
     };
   }, [src]);
 
+  /**
+   * A still to paint while the video itself is still arriving.
+   *
+   * Without one the element knows its size as soon as the metadata lands but
+   * has no pixels to show, so the section held a correctly-shaped blank space
+   * for several seconds — which is what a reader notices, far more than a
+   * video that starts a moment late.
+   *
+   * Every video under public/ has a .jpg of its first frame beside it, made
+   * at build time from the video itself, so the name is enough to find it.
+   * They are 12–40KB and paint immediately. A video uploaded later through
+   * the admin has no such file; the request simply 404s, the poster is
+   * ignored, and the "#t" fragment below covers that case as before.
+   */
+  const stillFrame =
+    poster ||
+    (src.startsWith("/") && /\.(mp4|webm|mov|m4v)$/i.test(src)
+      ? src.replace(/\.(mp4|webm|mov|m4v)$/i, ".jpg")
+      : undefined);
+
   // "#t=0.001" asks for the frame at that timestamp, which iOS then paints as
   // a still. Without it the element stays blank until playback begins.
-  const withFirstFrame = poster || src.includes("#") ? src : `${src}#t=0.001`;
+  const withFirstFrame = stillFrame || src.includes("#") ? src : `${src}#t=0.001`;
 
   return (
     <video
       ref={ref}
       src={withFirstFrame}
-      poster={poster}
+      poster={stillFrame}
       autoPlay
       muted
       loop
       playsInline
-      preload={eager ? "auto" : "metadata"}
+      /**
+       * Fetch it with the page, not when the reader reaches it.
+       *
+       * "metadata" bought nothing worth having: the product-page videos are
+       * 166KB to 680KB, smaller than a photograph already on the same page
+       * (244KB), and holding them back only meant the download started once
+       * the reader was already looking at the empty space. They are also
+       * cached for a year now, so a returning visitor fetches nothing at all.
+       */
+      preload="auto"
       controls={needsTap}
       className={className}
       onClick={() => ref.current?.play().catch(() => {})}
