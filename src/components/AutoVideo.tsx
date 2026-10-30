@@ -57,18 +57,35 @@ export default function AutoVideo({
      * off screen on iOS, another tab taking over, Low Power Mode engaging
      * mid-visit — stopped it for the rest of the session.
      */
+    /**
+     * One attempt at a time.
+     *
+     * el.paused stays true for as long as play() is still deciding, so the
+     * guard below let every caller through while the first attempt was in
+     * flight — and "scroll" is one of the callers. A phone fires that dozens
+     * of times a second, so scrolling towards the video threw a fresh play()
+     * at it on each frame, and a play() arriving while another is pending
+     * aborts the one already working. The video spent the scroll being asked
+     * to start over instead of starting.
+     */
+    let starting = false;
+
     const tryPlay = () => {
-      if (!el.paused) return;
+      if (starting || !el.paused) return;
       // Set muted through the property as well as the attribute: some browsers
       // consult the property when deciding whether autoplay is permitted, and
       // refuse a video they consider unmuted.
       el.muted = true;
+      starting = true;
       el.play().then(
         () => {
+          starting = false;
           setNeedsTap(false);
           clearTimeout(giveUpTimer);
         },
-        () => {},
+        () => {
+          starting = false;
+        },
       );
     };
 
@@ -108,7 +125,12 @@ export default function AutoVideo({
           el.preload = "auto";
           // preload is read when the element loads its source, so the change
           // means nothing on its own once that has happened.
-          el.load();
+          //
+          // But load() starts the element over from nothing, so it must not
+          // reach a video that is already running: both observers can fire in
+          // the same tick when the page opens near the video, and resetting a
+          // video that had just begun would stop it dead.
+          if (el.paused && !el.currentTime) el.load();
         }
         preloader.disconnect();
       },
@@ -130,7 +152,16 @@ export default function AutoVideo({
             if (el.paused) setNeedsTap(true);
           }, 2500);
         }),
-      { threshold: 0.25 },
+      /**
+       * Start it as it arrives, not a quarter of the way in.
+       *
+       * A quarter of a tall video is most of a phone screen, so playback was
+       * asked for well after the video was being looked at — the first frame
+       * sat there as a still while the viewer waited. The margin starts it
+       * just before the top edge appears, so by the time it is on screen it
+       * is already running.
+       */
+      { threshold: 0, rootMargin: "200px 0px" },
     );
     observer.observe(el);
 
