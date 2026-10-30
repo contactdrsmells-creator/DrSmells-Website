@@ -89,6 +89,33 @@ export default function AutoVideo({
     const onVisible = () => { if (document.visibilityState === "visible") tryPlay(); };
     document.addEventListener("visibilitychange", onVisible);
 
+    /**
+     * Start fetching about a screen before the video is reached.
+     *
+     * Waiting until it was actually on screen meant the download only began
+     * once the viewer was already looking at the space where it should be —
+     * so on a phone the section arrived as a tall blank gap that filled in
+     * seconds later, which is exactly how long the file took to arrive.
+     *
+     * A screen's warning is enough for these: they are a few hundred
+     * kilobytes, and scrolling that last screen takes longer than fetching
+     * them. Nothing is fetched for a video the viewer never scrolls near.
+     */
+    const preloader = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (el.preload !== "auto") {
+          el.preload = "auto";
+          // preload is read when the element loads its source, so the change
+          // means nothing on its own once that has happened.
+          el.load();
+        }
+        preloader.disconnect();
+      },
+      { rootMargin: "800px 0px" },
+    );
+    preloader.observe(el);
+
     const observer = new IntersectionObserver(
       (entries) =>
         entries.forEach((entry) => {
@@ -116,6 +143,7 @@ export default function AutoVideo({
 
     return () => {
       observer.disconnect();
+      preloader.disconnect();
       clearInterval(keepPlaying);
       clearTimeout(giveUpTimer);
       gestures.forEach((type) => document.removeEventListener(type, onGesture));
