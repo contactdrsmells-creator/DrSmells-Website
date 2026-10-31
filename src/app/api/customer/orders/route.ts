@@ -1,5 +1,6 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { getSiteSettings } from "@/lib/data";
+import { CANCELLED } from "@/lib/points";
 
 /**
  * Every order this member has placed, wherever they placed it, and where each
@@ -34,6 +35,30 @@ interface CrmOrder {
   tracking_code: string | null;
   items: Line[];
   created_at: string;
+}
+
+/**
+ * Only orders the member actually bought.
+ *
+ * The page listed everything with their name on it, which meant a cancelled
+ * order sat in their history as though it were coming, and every abandoned
+ * checkout did too — a member who tried to pay three times and succeeded once
+ * saw three orders. Neither is something they can act on, and a cancelled one
+ * invites a message asking where it is.
+ *
+ * The shop knows whether money arrived, so its own orders must say paid. The
+ * CRM's do not carry a payment field: an order is written there once it has
+ * been taken, so existing and not cancelled is the most that can be asked of
+ * them — a chat order still waiting to be packed is real and should show.
+ */
+function websiteOrderCounts(order: { status: string | null; payment_status: string | null }): boolean {
+  return (
+    order.payment_status === "paid" && !CANCELLED.has(String(order.status || "").toLowerCase())
+  );
+}
+
+function crmOrderCounts(order: { status: string | null }): boolean {
+  return !CANCELLED.has(String(order.status || "").toLowerCase());
 }
 
 /** Where a tracking code can be looked up, with the code put into the link. */
@@ -100,10 +125,15 @@ export async function GET() {
     chatOnly.set(order.order_id, order);
   }
 
-  const orders = (mine || []).map((order) => {
-    // Matched to the CRM by order number, which a website order carries in
-    // both systems. Once matched it is no longer a chat order.
-    chatOnly.delete(order.order_number);
+  // Matched to the CRM by order number, which a website order carries in both
+  // systems. Once matched it is no longer a chat order.
+  //
+  // Done for every order, including the ones about to be filtered out: a
+  // cancelled website order that did not claim its twin here would come back
+  // round below as a chat order and be shown after all.
+  for (const order of mine || []) chatOnly.delete(order.order_number);
+
+  const orders = (mine || []).filter(websiteOrderCounts).map((order) => {
     const code = trackingFor.get(order.order_number) || null;
     return {
       order_number: order.order_number,
@@ -128,6 +158,7 @@ export async function GET() {
 
   // What they bought over chat, which the shop has no record of.
   for (const order of chatOnly.values()) {
+    if (!crmOrderCounts(order)) continue;
     orders.push({
       order_number: order.order_id,
       source: "chat" as unknown as "website",
