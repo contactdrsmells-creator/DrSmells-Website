@@ -46,6 +46,10 @@ export default function AdminProducts() {
   const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const [isNew, setIsNew] = useState(false);
+  // Retired products stay in the table — their old orders and reviews point at
+  // them — but they are not what anyone comes to this page to manage, so they
+  // get a tab of their own instead of a place in the live list.
+  const [tab, setTab] = useState<"active" | "inactive">("active");
   const [variations, setVariations] = useState<ProductVariation[]>([]);
   /** Paid sales per variation, so a cap can be judged against them. */
   const [variationSold, setVariationSold] = useState<Record<string, number>>({});
@@ -346,19 +350,36 @@ export default function AdminProducts() {
     loadProducts();
   }
 
-  async function moveProduct(idx: number, direction: "up" | "down") {
+  async function moveProduct(list: Product[], idx: number, direction: "up" | "down") {
     if (!isConfigured) return;
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= products.length) return;
-    const a = products[idx];
-    const b = products[swapIdx];
-    // Use explicit index-based sort orders to avoid duplicate sort_order issues
-    await Promise.all([
-      updateRecord("products", a.id, { sort_order: swapIdx }),
-      updateRecord("products", b.id, { sort_order: idx }),
-    ]);
+    if (swapIdx < 0 || swapIdx >= list.length) return;
+
+    // The arrows move a product past the one above or below it *on screen*,
+    // and a tab shows only part of the shop — so the two rows that trade
+    // places need not be neighbours in the saved order. Rebuild the whole
+    // order with the pair swapped and renumber it from the top, which also
+    // settles the duplicate sort_orders older rows were saved with.
+    const order = products.map((p) => p.id);
+    const aPos = order.indexOf(list[idx].id);
+    const bPos = order.indexOf(list[swapIdx].id);
+    if (aPos < 0 || bPos < 0) return;
+    [order[aPos], order[bPos]] = [order[bPos], order[aPos]];
+
+    const writes: Promise<unknown>[] = [];
+    order.forEach((id, position) => {
+      const current = products.find((p) => p.id === id);
+      if (current && current.sort_order !== position) {
+        writes.push(updateRecord("products", id, { sort_order: position }));
+      }
+    });
+    await Promise.all(writes);
     loadProducts();
   }
+
+  const activeProducts = products.filter((p) => !p.inactive);
+  const inactiveProducts = products.filter((p) => p.inactive);
+  const visibleProducts = tab === "inactive" ? inactiveProducts : activeProducts;
 
   return (
     <div>
@@ -1193,6 +1214,29 @@ export default function AdminProducts() {
         </div>
       )}
 
+      {/* Active / Deactivated tabs */}
+      <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
+        {([
+          { key: "active" as const, label: "Active", count: activeProducts.length },
+          { key: "inactive" as const, label: "Deactivated", count: inactiveProducts.length },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.key
+                ? "border-olive text-olive"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            {t.label}
+            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${tab === t.key ? "bg-sage-light text-olive" : "bg-gray-100 text-gray-400"}`}>
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Products Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full">
@@ -1207,12 +1251,19 @@ export default function AdminProducts() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {products.map((product, idx) => (
+            {visibleProducts.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
+                  {tab === "inactive" ? "No deactivated products." : "No active products yet."}
+                </td>
+              </tr>
+            )}
+            {visibleProducts.map((product, idx) => (
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="px-2 py-3">
                   <div className="flex flex-col items-center gap-0.5">
-                    <button onClick={() => moveProduct(idx, "up")} disabled={idx === 0} className="p-0.5 text-gray-300 hover:text-olive disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-4 h-4" /></button>
-                    <button onClick={() => moveProduct(idx, "down")} disabled={idx === products.length - 1} className="p-0.5 text-gray-300 hover:text-olive disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-4 h-4" /></button>
+                    <button onClick={() => moveProduct(visibleProducts, idx, "up")} disabled={idx === 0} className="p-0.5 text-gray-300 hover:text-olive disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-4 h-4" /></button>
+                    <button onClick={() => moveProduct(visibleProducts, idx, "down")} disabled={idx === visibleProducts.length - 1} className="p-0.5 text-gray-300 hover:text-olive disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-4 h-4" /></button>
                   </div>
                 </td>
                 <td className="px-4 py-3">
