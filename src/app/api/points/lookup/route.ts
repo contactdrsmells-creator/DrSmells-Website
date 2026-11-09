@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { normalisePhone, supabaseAdmin } from "@/lib/customer-auth";
-import { getBalance } from "@/lib/points";
+import { getBalances } from "@/lib/points";
 
 /**
  * Which of these numbers hold a shop account, and what each has collected.
@@ -42,17 +42,25 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: false })
       .range(0, 999);
 
-    const all = [];
-    for (const customer of everyone || []) {
-      all.push({
+    // One read of the ledger, not one per customer. This asked for a balance
+    // 129 times in a row, a round trip each: 16 seconds against a ledger this
+    // size, so the function was killed before it could answer and the CRM —
+    // which treats a failure as an empty result — showed no shop accounts at
+    // all and matched nobody on "has a shop account". getBalances was written
+    // for exactly this after the admin screen did the same thing; this path
+    // was never moved over.
+    const people = everyone || [];
+    const balances = await getBalances(db, people.map((c) => c.id));
+
+    return Response.json({
+      results: people.map((customer) => ({
         phone: customer.phone,
         asked_as: customer.phone,
         name: customer.name,
         joined: customer.created_at,
-        points: await getBalance(db, customer.id),
-      });
-    }
-    return Response.json({ results: all });
+        points: balances.get(customer.id) ?? 0,
+      })),
+    });
   }
 
   const asked: string[] = Array.isArray(body?.phones) ? body.phones.slice(0, 500) : [];
@@ -73,16 +81,18 @@ export async function POST(request: Request) {
     .select("id, phone, name, created_at")
     .in("phone", [...wanted.keys()]);
 
-  const results = [];
-  for (const customer of customers || []) {
-    results.push({
+  // The same one read, for the same reason: this branch takes up to 500
+  // numbers and would have made 500 round trips to answer about them.
+  const found = customers || [];
+  const balances = await getBalances(db, found.map((c) => c.id));
+
+  return Response.json({
+    results: found.map((customer) => ({
       phone: customer.phone,
       asked_as: wanted.get(customer.phone) ?? customer.phone,
       name: customer.name,
       joined: customer.created_at,
-      points: await getBalance(db, customer.id),
-    });
-  }
-
-  return Response.json({ results });
+      points: balances.get(customer.id) ?? 0,
+    })),
+  });
 }
