@@ -1,6 +1,25 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { getSiteSettings } from "@/lib/data";
-import { CANCELLED } from "@/lib/points";
+import {
+  awardForOrders, CANCELLED, getLedger, lifetimeEarnedFrom,
+} from "@/lib/points";
+import { getTiers, multiplierFor } from "@/lib/tiers";
+
+/**
+ * The day CRM orders started earning points.
+ *
+ * An order taken over chat never earned any: the sweep on the account page
+ * reads this shop's own orders table, the sync between the two systems runs
+ * one way into the CRM, and nothing ever carried a chat sale back. Switching
+ * it on without a line in the sand would have credited every completed chat
+ * order ever taken — 72 of them, 13,441 points, roughly doubling what the
+ * shop owes in points in one night, and landing as a mystery 450-point jump
+ * for sixty-three customers who had not bought anything that day.
+ *
+ * So it starts here and does not look behind it. A date rather than a deploy
+ * timestamp, because the line has to mean the same thing after a redeploy.
+ */
+const CRM_POINTS_FROM = process.env.POINTS_CRM_FROM || "2026-11-09";
 
 /**
  * Every order this member has placed, wherever they placed it, and where each
@@ -112,6 +131,44 @@ export async function GET() {
     fromCrm(session.phone),
     getSiteSettings().catch(() => ({}) as Record<string, Record<string, string>>),
   ]);
+
+  /**
+   * Points for the chat orders, swept the same way the account page sweeps
+   * this shop's own.
+   *
+   * Here rather than in /api/customer/me because the CRM's answer is already
+   * in hand — me deliberately does not wait on a second system — and awarding
+   * is keyed on the order number, so running it on every page load cannot pay
+   * twice. It also cannot double up with a website order that was synced into
+   * the CRM: both carry the same order number, and the ledger's unique index
+   * on it refuses the second.
+   *
+   * Complete only. The CRM has no payment field — an order is written there
+   * the moment it is taken — so complete is the most that can be asked of it
+   * before treating a sale as money in.
+   */
+  const earnable = crm.filter(
+    (o) =>
+      String(o.status || "").toLowerCase() === "complete" &&
+      !CANCELLED.has(String(o.status || "").toLowerCase()) &&
+      Number(o.amount) > 0 &&
+      String(o.created_at || "") >= CRM_POINTS_FROM,
+  );
+
+  if (earnable.length) {
+    try {
+      const [ledger, tiers] = await Promise.all([getLedger(db, session.id), getTiers(db)]);
+      await awardForOrders(db, {
+        customerId: session.id,
+        multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
+        orders: earnable.map((o) => ({ orderNumber: o.order_id, spend: Number(o.amount) })),
+      });
+    } catch (err) {
+      // A customer should still see their orders if the award fails. The next
+      // page load sweeps again, so nothing is lost but a moment.
+      console.error("[Orders] Could not award points for CRM orders:", (err as Error).message);
+    }
+  }
 
   // DHL eCommerce by default, since that is what the labels are made with.
   // Editable in Site Settings, because the courier is not a fact about code.
