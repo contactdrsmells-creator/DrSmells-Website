@@ -1,10 +1,14 @@
 import { timingSafeEqual } from "crypto";
 import { normalisePhone, supabaseAdmin } from "@/lib/customer-auth";
-import { awardForOrders, crmOrderEarns, getLedger, lifetimeEarnedFrom } from "@/lib/points";
+import {
+  awardForOrders, crmOrderCancelled, crmOrderEarns, getLedger, lifetimeEarnedFrom,
+  reverseForCancelled,
+} from "@/lib/points";
 import { getTiers, multiplierFor } from "@/lib/tiers";
 
 /**
- * Points for an order the CRM has just completed.
+ * Points for an order the CRM has just taken, or taken back for one it has
+ * just cancelled.
  *
  * The account page already sweeps a member's chat orders when they open it,
  * which is enough for the customer but not for the shop: until that customer
@@ -44,13 +48,21 @@ export async function POST(request: Request) {
     return Response.json({ error: "A phone number and an order number are required" }, { status: 400 });
   }
 
+  const db = supabaseAdmin();
+
+  // A cancelled order gives its points back. Keyed on the order number and
+  // idempotent, so cancelling twice — or a sweep arriving after this — takes
+  // nothing back a second time.
+  if (crmOrderCancelled(body)) {
+    const reversed = await reverseForCancelled(db, [orderNumber]);
+    return Response.json({ awarded: 0, reversed });
+  }
+
   // The same rule the account-page sweep applies, so an order cannot earn
   // through one door what it is refused at the other.
   if (!crmOrderEarns(body)) {
     return Response.json({ awarded: 0, reason: "not an earning order" });
   }
-
-  const db = supabaseAdmin();
 
   // Matched on the phone number, which is the only thing the two systems
   // agree on about a person — the CRM has no idea an account exists.

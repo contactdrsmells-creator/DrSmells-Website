@@ -31,9 +31,12 @@ export const CRM_POINTS_FROM = process.env.POINTS_CRM_FROM || "2026-11-09";
 /**
  * Whether a CRM order is one this shop pays points on.
  *
- * Complete only. The CRM has no payment field — an order is written there the
- * moment it is taken — so complete is the most that can be asked of it before
- * treating a sale as money in.
+ * Anything that is not cancelled. This waited for complete at first, on the
+ * reasoning that the CRM has no payment field and complete was the only
+ * signal the money had arrived — but a chat order is agreed and paid before
+ * it is ever typed in, and the customer asking about their points is asking
+ * now, not when somebody gets round to marking it packed. So the points
+ * appear when the order does, and a cancellation takes them back.
  */
 export function crmOrderEarns(order: {
   status?: string | null;
@@ -42,11 +45,15 @@ export function crmOrderEarns(order: {
 }): boolean {
   const status = String(order.status || "").toLowerCase();
   return (
-    status === "complete" &&
     !CANCELLED.has(status) &&
     Number(order.amount) > 0 &&
     String(order.created_at || "") >= CRM_POINTS_FROM
   );
+}
+
+/** Whether a CRM order has been called off, so its points must come back. */
+export function crmOrderCancelled(order: { status?: string | null }): boolean {
+  return CANCELLED.has(String(order.status || "").toLowerCase());
 }
 
 export interface PointsRules {

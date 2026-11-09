@@ -1,7 +1,8 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { getSiteSettings } from "@/lib/data";
 import {
-  awardForOrders, CANCELLED, crmOrderEarns, getLedger, lifetimeEarnedFrom,
+  awardForOrders, CANCELLED, crmOrderCancelled, crmOrderEarns, getLedger,
+  lifetimeEarnedFrom, reverseForCancelled,
 } from "@/lib/points";
 import { getTiers, multiplierFor } from "@/lib/tiers";
 
@@ -132,15 +133,23 @@ export async function GET() {
    * before treating a sale as money in.
    */
   const earnable = crm.filter(crmOrderEarns);
+  // And the ones called off since. A chat order cancelled in the CRM has to
+  // give its points back here as well, or the only thing that ever took them
+  // back would be the push from the CRM at the moment of cancelling — and a
+  // push that failed would leave them for ever.
+  const calledOff = crm.filter(crmOrderCancelled).map((o) => o.order_id);
 
-  if (earnable.length) {
+  if (earnable.length || calledOff.length) {
     try {
       const [ledger, tiers] = await Promise.all([getLedger(db, session.id), getTiers(db)]);
-      await awardForOrders(db, {
-        customerId: session.id,
-        multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
-        orders: earnable.map((o) => ({ orderNumber: o.order_id, spend: Number(o.amount) })),
-      });
+      if (earnable.length) {
+        await awardForOrders(db, {
+          customerId: session.id,
+          multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
+          orders: earnable.map((o) => ({ orderNumber: o.order_id, spend: Number(o.amount) })),
+        });
+      }
+      if (calledOff.length) await reverseForCancelled(db, calledOff);
     } catch (err) {
       // A customer should still see their orders if the award fails. The next
       // page load sweeps again, so nothing is lost but a moment.
