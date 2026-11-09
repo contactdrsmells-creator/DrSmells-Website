@@ -1,10 +1,6 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { getSiteSettings } from "@/lib/data";
-import {
-  awardForOrders, CANCELLED, crmOrderCancelled, crmOrderEarns, getLedger,
-  lifetimeEarnedFrom, reverseForCancelled,
-} from "@/lib/points";
-import { getTiers, multiplierFor } from "@/lib/tiers";
+import { CANCELLED } from "@/lib/points";
 
 /**
  * Every order this member has placed, wherever they placed it, and where each
@@ -23,6 +19,13 @@ import { getTiers, multiplierFor } from "@/lib/tiers";
  * The CRM being unreachable costs the tracking codes and the chat orders, not
  * the page — somebody checking an order they placed here should not be told
  * to come back later because a second system is down.
+ *
+ * Nothing is awarded here, deliberately. /api/customer/sync does that, and it
+ * only counts chat orders placed since the account was opened: a mobile
+ * number nobody has proved they own must not arrive carrying the history of
+ * whoever had it before. Awarding from this endpoint as well — which it did
+ * briefly — skipped that check, because the orders it lists are every order
+ * on the number rather than the ones the account has a claim to.
  */
 
 interface Line {
@@ -116,46 +119,6 @@ export async function GET() {
     fromCrm(session.phone),
     getSiteSettings().catch(() => ({}) as Record<string, Record<string, string>>),
   ]);
-
-  /**
-   * Points for the chat orders, swept the same way the account page sweeps
-   * this shop's own.
-   *
-   * Here rather than in /api/customer/me because the CRM's answer is already
-   * in hand — me deliberately does not wait on a second system — and awarding
-   * is keyed on the order number, so running it on every page load cannot pay
-   * twice. It also cannot double up with a website order that was synced into
-   * the CRM: both carry the same order number, and the ledger's unique index
-   * on it refuses the second.
-   *
-   * Complete only. The CRM has no payment field — an order is written there
-   * the moment it is taken — so complete is the most that can be asked of it
-   * before treating a sale as money in.
-   */
-  const earnable = crm.filter(crmOrderEarns);
-  // And the ones called off since. A chat order cancelled in the CRM has to
-  // give its points back here as well, or the only thing that ever took them
-  // back would be the push from the CRM at the moment of cancelling — and a
-  // push that failed would leave them for ever.
-  const calledOff = crm.filter(crmOrderCancelled).map((o) => o.order_id);
-
-  if (earnable.length || calledOff.length) {
-    try {
-      const [ledger, tiers] = await Promise.all([getLedger(db, session.id), getTiers(db)]);
-      if (earnable.length) {
-        await awardForOrders(db, {
-          customerId: session.id,
-          multiplier: multiplierFor(lifetimeEarnedFrom(ledger), tiers),
-          orders: earnable.map((o) => ({ orderNumber: o.order_id, spend: Number(o.amount) })),
-        });
-      }
-      if (calledOff.length) await reverseForCancelled(db, calledOff);
-    } catch (err) {
-      // A customer should still see their orders if the award fails. The next
-      // page load sweeps again, so nothing is lost but a moment.
-      console.error("[Orders] Could not award points for CRM orders:", (err as Error).message);
-    }
-  }
 
   // DHL eCommerce by default, since that is what the labels are made with.
   // Editable in Site Settings, because the courier is not a fact about code.
