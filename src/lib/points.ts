@@ -177,7 +177,10 @@ export async function getBalances(
 export async function getHistory(db: SupabaseClient, customerId: string, limit = 50) {
   const { data } = await db
     .from("points_ledger")
-    .select("delta, reason, order_number, expires_at, created_at")
+    // note and actor come along because a manual adjustment is only readable
+    // with them: a bare "-200, manual" answers neither what it was for nor
+    // who decided it.
+    .select("delta, reason, note, actor, order_number, expires_at, created_at")
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false })
     .limit(limit);
