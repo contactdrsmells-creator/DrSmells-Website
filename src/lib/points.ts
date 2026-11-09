@@ -11,6 +11,44 @@ import { readAll } from "@/lib/paged";
  * the owner — see exactly where a figure came from.
  */
 
+/**
+ * The day CRM orders started earning points.
+ *
+ * An order taken over chat never earned any: the sweep on the account page
+ * reads this shop's own orders table, the sync between the two systems runs
+ * one way into the CRM, and nothing ever carried a chat sale back. Switching
+ * it on without a line in the sand would have credited every completed chat
+ * order ever taken — 72 of them, 13,441 points, roughly doubling what the
+ * shop owes in points in one night, and landing as a mystery 450-point jump
+ * for sixty-three customers who had not bought anything that day.
+ *
+ * A date rather than a deploy timestamp, so the line means the same thing
+ * after a redeploy. Both doors use it: the sweep when a member opens their
+ * account, and the award the CRM pushes when an order completes.
+ */
+export const CRM_POINTS_FROM = process.env.POINTS_CRM_FROM || "2026-11-09";
+
+/**
+ * Whether a CRM order is one this shop pays points on.
+ *
+ * Complete only. The CRM has no payment field — an order is written there the
+ * moment it is taken — so complete is the most that can be asked of it before
+ * treating a sale as money in.
+ */
+export function crmOrderEarns(order: {
+  status?: string | null;
+  amount?: number | string | null;
+  created_at?: string | null;
+}): boolean {
+  const status = String(order.status || "").toLowerCase();
+  return (
+    status === "complete" &&
+    !CANCELLED.has(status) &&
+    Number(order.amount) > 0 &&
+    String(order.created_at || "") >= CRM_POINTS_FROM
+  );
+}
+
 export interface PointsRules {
   /** Points earned per RM1 spent. */
   earn_per_ringgit: number;

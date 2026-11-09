@@ -1,25 +1,9 @@
 import { getCustomerSession, supabaseAdmin } from "@/lib/customer-auth";
 import { getSiteSettings } from "@/lib/data";
 import {
-  awardForOrders, CANCELLED, getLedger, lifetimeEarnedFrom,
+  awardForOrders, CANCELLED, crmOrderEarns, getLedger, lifetimeEarnedFrom,
 } from "@/lib/points";
 import { getTiers, multiplierFor } from "@/lib/tiers";
-
-/**
- * The day CRM orders started earning points.
- *
- * An order taken over chat never earned any: the sweep on the account page
- * reads this shop's own orders table, the sync between the two systems runs
- * one way into the CRM, and nothing ever carried a chat sale back. Switching
- * it on without a line in the sand would have credited every completed chat
- * order ever taken — 72 of them, 13,441 points, roughly doubling what the
- * shop owes in points in one night, and landing as a mystery 450-point jump
- * for sixty-three customers who had not bought anything that day.
- *
- * So it starts here and does not look behind it. A date rather than a deploy
- * timestamp, because the line has to mean the same thing after a redeploy.
- */
-const CRM_POINTS_FROM = process.env.POINTS_CRM_FROM || "2026-11-09";
 
 /**
  * Every order this member has placed, wherever they placed it, and where each
@@ -147,13 +131,7 @@ export async function GET() {
    * the moment it is taken — so complete is the most that can be asked of it
    * before treating a sale as money in.
    */
-  const earnable = crm.filter(
-    (o) =>
-      String(o.status || "").toLowerCase() === "complete" &&
-      !CANCELLED.has(String(o.status || "").toLowerCase()) &&
-      Number(o.amount) > 0 &&
-      String(o.created_at || "") >= CRM_POINTS_FROM,
-  );
+  const earnable = crm.filter(crmOrderEarns);
 
   if (earnable.length) {
     try {
