@@ -51,7 +51,22 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!verifyPassword(password, customer.password_hash)) {
+  /**
+   * An account the shop opened starts with the mobile number as its password,
+   * stored normalised — 60123456789. The customer thinks of that number as
+   * 0123456789 and types it that way, which is the same number and the wrong
+   * password, and there is nothing on the screen to explain why.
+   *
+   * So while the password is still the default, any spelling of their own
+   * number gets in. The moment they set a password of their own this stops
+   * matching — verifyPassword against the phone fails — and only the real
+   * password works. It never weakens a password somebody chose.
+   */
+  const stillTheDefault =
+    normalisePhone(password) === customer.phone &&
+    verifyPassword(customer.phone, customer.password_hash);
+
+  if (!verifyPassword(password, customer.password_hash) && !stillTheDefault) {
     /**
      * A served lockout clears the count.
      *
