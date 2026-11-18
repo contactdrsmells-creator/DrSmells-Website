@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { Save } from "lucide-react";
 import { upsertSetting } from "@/lib/admin-content";
+import { defaultPolicies, withDefaults, type Policies } from "@/lib/policies";
 
 interface Settings {
   brand: { name: string; tagline: string; mission: string; company: string };
@@ -21,6 +22,8 @@ interface Settings {
   // Where a member's tracking number takes them. Kept here rather than in the
   // code because the courier is a business decision, not a fact about code.
   shipping: { tracking_url: string };
+  // The Shipping & Returns page's wording.
+  policies: Policies;
 }
 
 const defaultSettings: Settings = {
@@ -35,6 +38,7 @@ const defaultSettings: Settings = {
     whatsapp_url: "",
   },
   shipping: { tracking_url: "https://ecommerceportal.dhl.com/track/?ref={code}" },
+  policies: defaultPolicies,
 };
 
 export default function AdminSettings() {
@@ -53,8 +57,10 @@ export default function AdminSettings() {
       if (data) {
         const s = { ...defaultSettings };
         data.forEach((row: { key: string; value: Record<string, string> }) => {
-          if (row.key in s) {
-            (s as Record<string, Record<string, string>>)[row.key] = row.value;
+          if (row.key === "policies") {
+            s.policies = withDefaults(row.value as Partial<Policies>);
+          } else if (row.key in s) {
+            (s as unknown as Record<string, Record<string, string>>)[row.key] = row.value;
           }
         });
         setSettings(s);
@@ -99,6 +105,38 @@ export default function AdminSettings() {
       </div>
 
       <div className="space-y-6">
+        {/* Shipping & Returns page */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1">Shipping &amp; Returns Page</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            The page the footer&apos;s &ldquo;Shipping &amp; Returns&rdquo; link opens (
+            <a href="/shipping-returns" target="_blank" rel="noopener noreferrer" className="text-teal underline">view it</a>).
+            Leave a blank line between paragraphs. A number written as 60… becomes a WhatsApp link.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Page title</label>
+              <input type="text" value={settings.policies.page_title}
+                onChange={(e) => updateField("policies", "page_title", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+            </div>
+            {([
+              ["returns_title", "returns_body"],
+              ["shipping_title", "shipping_body"],
+            ] as const).map(([title, body]) => (
+              <div key={title} className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Section heading</label>
+                <input type="text" value={settings.policies[title]}
+                  onChange={(e) => updateField("policies", title, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal/50" />
+                <textarea value={settings.policies[body]} rows={7} maxLength={5000}
+                  onChange={(e) => updateField("policies", body, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-teal/50" />
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Shipment tracking */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h2 className="text-lg font-semibold text-gray-800 mb-1">Shipment Tracking</h2>

@@ -77,7 +77,7 @@ export default function Footer() {
               {/* Customer Support removed — it pointed at /contact, which is
                   already linked as "Contact Us" under About. Admin Login
                   removed: no reason to advertise the admin panel to shoppers. */}
-              <li><Link href="/faq" className="hover:text-olive transition-colors">Shipping & Returns</Link></li>
+              <li><Link href="/shipping-returns" className="hover:text-olive transition-colors">Shipping & Returns</Link></li>
             </ul>
           </div>
         </div>
