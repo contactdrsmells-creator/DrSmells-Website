@@ -77,7 +77,7 @@ export default function AdminAutomationPage() {
       const data = await res.json();
       setTestResult(
         res.ok && data.ok
-          ? `Sent to ${data.sent_to} — Strive replied ${data.strive_status}`
+          ? `Sent to ${data.sent_to} — webhook replied ${data.strive_status}`
           : `Failed: ${data.error || `${data.strive_status} ${data.strive_response}`}`,
       );
     } catch {
@@ -104,7 +104,7 @@ export default function AdminAutomationPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">WhatsApp Automation</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Follow up automatically on orders that stay unpaid, via Strive
+            Follow up automatically on orders that stay unpaid, via Chatshero or Strive
           </p>
         </div>
         <button
@@ -186,7 +186,7 @@ export default function AdminAutomationPage() {
         </div>
 
         <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Strive connection</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">WhatsApp tool connection</h2>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
@@ -200,7 +200,7 @@ export default function AdminAutomationPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Flowbuilder key {config.flowbuilder_key_set && <span className="text-green-600 text-xs">(saved)</span>}
+                  Secret key {config.flowbuilder_key_set && <span className="text-green-600 text-xs">(saved)</span>}
                 </label>
                 <input
                   type="password"
@@ -209,7 +209,7 @@ export default function AdminAutomationPage() {
                   placeholder="Paste to change"
                   className="w-full px-3 py-2 border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-olive/30"
                 />
-                <p className="text-xs text-gray-500 mt-1">Sent as the strive-flowbuilder-key header</p>
+                <p className="text-xs text-gray-500 mt-1">Chatshero: the Webhook secret. Strive: the Flowbuilder key.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone field name</label>
@@ -225,7 +225,7 @@ export default function AdminAutomationPage() {
 
           <div className="bg-gray-50 border rounded-lg p-4 mt-4">
             <p className="text-sm text-gray-600 mb-2">
-              These variables are sent to your Strive flow:
+              These variables are sent to your workflow:
             </p>
             <div className="flex flex-wrap gap-2 text-xs font-mono">
               {["customer_name", "order_id", "amount", "payment_url"].map((f) => (

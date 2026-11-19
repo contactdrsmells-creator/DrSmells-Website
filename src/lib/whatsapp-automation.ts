@@ -215,6 +215,10 @@ export async function sendToStrive(
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "strive-flowbuilder-key": config.flowbuilder_key,
+        // Chatshero's Webhook Trigger reads its secret from this header instead.
+        // Both carry the same key and only go to the one URL saved in settings,
+        // so either tool can sit behind it without a code change.
+        "X-Webhook-Secret": config.flowbuilder_key,
       },
       body: new URLSearchParams(fields).toString(),
     });

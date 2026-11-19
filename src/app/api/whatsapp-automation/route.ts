@@ -74,7 +74,7 @@ export async function PUT(request: Request) {
     };
 
     if (value.enabled && !value.flowbuilder_key) {
-      return Response.json({ error: "Flowbuilder key is required to enable" }, { status: 400 });
+      return Response.json({ error: "Secret key is required to enable" }, { status: 400 });
     }
 
     const supabase = getSupabase();
