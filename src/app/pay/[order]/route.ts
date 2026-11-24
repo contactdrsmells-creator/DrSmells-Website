@@ -226,6 +226,12 @@ export async function GET(
     order.payment_status === "paid" || PAID_STATUSES.includes(String(order.status));
   if (alreadyPaid) return Response.redirect(confirmation, 302);
 
+  // The link first shows the order with a promo code box; its Pay button
+  // comes back here with ?go=1 to make the checkout at the current price.
+  if (!new URL(request.url).searchParams.has("go")) {
+    return Response.redirect(`${origin}/pay/${encodeURIComponent(orderNumber)}/review`, 302);
+  }
+
   // A link opened again within a few minutes reuses the checkout just created.
   //
   // Minting a fresh one on every visit is what keeps a days-old reminder
