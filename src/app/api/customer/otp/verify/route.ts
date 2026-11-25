@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import {
-  CUSTOMER_COOKIE, CUSTOMER_MAX_AGE, cookieOptions, createCustomerToken,
+  CUSTOMER_COOKIE, CUSTOMER_MAX_AGE, PASSWORD_HINT_COOKIE, cookieOptions, createCustomerToken,
   normalisePhone, sessionsAreConfigured, supabaseAdmin,
 } from "@/lib/customer-auth";
 
@@ -64,6 +64,13 @@ export async function POST(request: Request) {
   }).eq("id", customer.id);
 
   const store = await cookies();
-  store.set(CUSTOMER_COOKIE, createCustomerToken(customer), cookieOptions(CUSTOMER_MAX_AGE));
-  return Response.json({ customer });
+  // A code proves the number, but the account is then made to choose a
+  // password before it can see or do anything else.
+  store.set(
+    CUSTOMER_COOKIE,
+    createCustomerToken({ ...customer, mustSetPassword: true }),
+    cookieOptions(CUSTOMER_MAX_AGE),
+  );
+  store.set(PASSWORD_HINT_COOKIE, "1", { ...cookieOptions(CUSTOMER_MAX_AGE), httpOnly: false });
+  return Response.json({ customer, must_set_password: true });
 }

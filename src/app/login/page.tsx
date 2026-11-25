@@ -52,8 +52,8 @@ export default function LoginPage() {
         setNotice(data.message || "Check WhatsApp for your code.");
         return;
       }
-      router.push("/account?set-password=1");
-      router.refresh();
+      // The password pop-up opens over the account page before anything shows.
+      window.location.href = "/account";
     } catch {
       setError("Could not reach the server. Please try again.");
     } finally {

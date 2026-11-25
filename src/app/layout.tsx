@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import ImageProtection from "@/components/ImageProtection";
 import MetaPixel from "@/components/MetaPixel";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
+import SetPasswordGate from "@/components/SetPasswordGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <FloatingWhatsApp />
         <Footer />
+        <SetPasswordGate />
       </body>
     </html>
   );

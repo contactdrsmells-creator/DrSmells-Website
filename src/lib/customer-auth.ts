@@ -19,7 +19,20 @@ export interface CustomerSession {
   id: string;
   phone: string;
   name: string | null;
+  /**
+   * Signed in by a WhatsApp code and not yet given a new password. Such a
+   * session can only set the password or log out; everything else treats it
+   * as signed out until it does.
+   */
+  mustSetPassword?: boolean;
 }
+
+/**
+ * A readable hint beside the signed session, so the page knows to ask for a
+ * password without a server round trip on every visit. It grants nothing: the
+ * signed token is what every route checks.
+ */
+export const PASSWORD_HINT_COOKIE = "must_set_password";
 
 /**
  * ADMIN_PASSWORD is in the chain because the admin sessions already fall back
@@ -74,12 +87,16 @@ function verifyToken(token: string | undefined): (CustomerSession & { exp: numbe
   }
 }
 
-export async function getCustomerSession(): Promise<CustomerSession | null> {
+export async function getCustomerSession(
+  { allowPending = false }: { allowPending?: boolean } = {},
+): Promise<CustomerSession | null> {
   if (!sessionsAreConfigured()) return null;
   const store = await cookies();
   const verified = verifyToken(store.get(COOKIE)?.value);
   if (!verified) return null;
-  return { id: verified.id, phone: verified.phone, name: verified.name };
+  const mustSetPassword = verified.mustSetPassword === true;
+  if (mustSetPassword && !allowPending) return null;
+  return { id: verified.id, phone: verified.phone, name: verified.name, mustSetPassword };
 }
 
 /**
