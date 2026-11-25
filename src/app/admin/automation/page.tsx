@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Save, Loader2, Send, MessageCircle } from "lucide-react";
+import WhatsAppLoginCode from "@/components/admin/WhatsAppLoginCode";
 
 interface AutomationConfig {
   enabled: boolean;
@@ -263,6 +264,8 @@ export default function AdminAutomationPage() {
             </p>
           )}
         </div>
+
+        <WhatsAppLoginCode />
       </div>
     </div>
   );

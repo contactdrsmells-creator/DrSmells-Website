@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!sessionsAreConfigured()) {
     return Response.json({ error: "Accounts are not switched on yet." }, { status: 503 });
   }
-  if (!whatsappConfigured()) {
+  if (!(await whatsappConfigured())) {
     console.error("[OTP] WhatsApp is not configured on this project");
     return Response.json(
       { error: "WhatsApp codes are not set up yet. Please contact us." },
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Could not send a code. Please try again." }, { status: 500 });
   }
 
-  const outcome = await sendLoginCode(phone, code);
+  const outcome = await sendLoginCode(phone, code, CODE_MINUTES);
   if (!outcome.ok) {
     return Response.json(
       { error: "Could not send the code on WhatsApp. Please contact us." },

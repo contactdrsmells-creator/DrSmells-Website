@@ -18,16 +18,34 @@
  *                         so it is a setting rather than a guess.
  */
 
+import { loadOtpWebhook, otpWebhookReady, sendCodeViaWebhook } from "@/lib/otp-webhook";
+
 const BASE = "https://graph.facebook.com/v19.0";
 
-export function whatsappConfigured(): boolean {
+function metaConfigured(): boolean {
   return Boolean(process.env.WA_PHONE_NUMBER_ID && process.env.WA_ACCESS_TOKEN);
+}
+
+/** True when either a Chatshero workflow or Meta's API can carry the code. */
+export async function whatsappConfigured(): Promise<boolean> {
+  if (metaConfigured()) return true;
+  return otpWebhookReady(await loadOtpWebhook());
 }
 
 export async function sendLoginCode(
   phone: string,
   code: string,
+  minutes = 10,
 ): Promise<{ ok: boolean; error?: string }> {
+  // The Chatshero workflow first: that is where the shop's number now lives.
+  const hook = await loadOtpWebhook();
+  if (otpWebhookReady(hook)) {
+    const r = await sendCodeViaWebhook(hook, phone, code, minutes);
+    if (r.ok) return { ok: true };
+    console.error(`[WhatsApp] Chatshero refused the code to ${phone} (${r.status}):`, r.body);
+    if (!metaConfigured()) return { ok: false, error: "send_failed" };
+  }
+
   const phoneId = process.env.WA_PHONE_NUMBER_ID;
   const token = process.env.WA_ACCESS_TOKEN;
   const template = process.env.WA_OTP_TEMPLATE || "login_code";
